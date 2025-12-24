@@ -595,3 +595,172 @@ error: Please commit or stash them.
 [周四 2025/12/25  0:14:13.11] Starting Sync Cycle... 
 [周四 2025/12/25  0:14:13.27] Current Branch: main 
 [周四 2025/12/25  0:14:13.27] Checking for local changes... 
+[周四 2025/12/25  0:14:13.43] Changes detected. Files to be committed: 
+M  README.md
+MM auto_git_dbfd.log
+A  install_dependencies.bat
+R  tools/run_labeling.bat -> run_labeling.bat
+M  run_ui.bat
+D  yolo-dbfd/Arial.ttf
+D  yolo-dbfd/data/Argoverse.yaml
+D  yolo-dbfd/data/GlobalWheat2020.yaml
+D  yolo-dbfd/data/Objects365.yaml
+D  yolo-dbfd/data/SKU-110K.yaml
+D  yolo-dbfd/data/VOC.yaml
+D  yolo-dbfd/data/VisDrone.yaml
+D  yolo-dbfd/data/coco.yaml
+D  yolo-dbfd/data/coco128.yaml
+D  yolo-dbfd/data/data.yaml
+D  yolo-dbfd/data/fire_data.yaml
+D  yolo-dbfd/data/hyps/hyp.finetune.yaml
+D  yolo-dbfd/data/hyps/hyp.finetune_objects365.yaml
+D  yolo-dbfd/data/hyps/hyp.scratch-high.yaml
+D  yolo-dbfd/data/hyps/hyp.scratch-low.yaml
+D  yolo-dbfd/data/hyps/hyp.scratch-med.yaml
+D  yolo-dbfd/data/hyps/hyp.scratch.yaml
+D  yolo-dbfd/data/mask_data.yaml
+D  yolo-dbfd/data/scripts/download_weights.sh
+D  yolo-dbfd/data/scripts/get_coco.sh
+D  yolo-dbfd/data/scripts/get_coco128.sh
+D  yolo-dbfd/data/xView.yaml
+D  yolo-dbfd/data_gen.py
+D  yolo-dbfd/detect.py
+D  yolo-dbfd/docs/Dockerfile
+D  yolo-dbfd/docs/README.md
+D  yolo-dbfd/docs/tutorial.ipynb
+D  yolo-dbfd/export.py
+D  yolo-dbfd/hubconf.py
+D  yolo-dbfd/images/UI/logo.jpeg
+D  yolo-dbfd/images/UI/right.jpeg
+D  yolo-dbfd/images/UI/up.jpeg
+D  yolo-dbfd/images/right.jpeg
+D  yolo-dbfd/setup.cfg
+D  yolo-dbfd/train.py
+D  "yolo-dbfd/train_\346\226\260.py"
+D  yolo-dbfd/utils/__init__.py
+D  yolo-dbfd/utils/activations.py
+D  yolo-dbfd/utils/augmentations.py
+D  yolo-dbfd/utils/autoanchor.py
+D  yolo-dbfd/utils/autobatch.py
+D  yolo-dbfd/utils/aws/__init__.py
+D  yolo-dbfd/utils/aws/mime.sh
+D  yolo-dbfd/utils/aws/resume.py
+D  yolo-dbfd/utils/aws/userdata.sh
+D  yolo-dbfd/utils/callbacks.py
+D  yolo-dbfd/utils/datasets.py
+D  yolo-dbfd/utils/datasets_not_print.py
+D  yolo-dbfd/utils/downloads.py
+D  yolo-dbfd/utils/flask_rest_api/README.md
+D  yolo-dbfd/utils/flask_rest_api/example_request.py
+D  yolo-dbfd/utils/flask_rest_api/restapi.py
+D  yolo-dbfd/utils/general.py
+D  yolo-dbfd/utils/google_app_engine/Dockerfile
+D  yolo-dbfd/utils/google_app_engine/additional_requirements.txt
+D  yolo-dbfd/utils/google_app_engine/app.yaml
+D  yolo-dbfd/utils/loggers/__init__.py
+D  yolo-dbfd/utils/loggers/wandb/README.md
+D  yolo-dbfd/utils/loggers/wandb/__init__.py
+D  yolo-dbfd/utils/loggers/wandb/log_dataset.py
+D  yolo-dbfd/utils/loggers/wandb/sweep.py
+D  yolo-dbfd/utils/loggers/wandb/sweep.yaml
+D  yolo-dbfd/utils/loggers/wandb/wandb_utils.py
+D  yolo-dbfd/utils/loss.py
+D  yolo-dbfd/utils/metrics.py
+D  yolo-dbfd/utils/plots.py
+D  yolo-dbfd/utils/torch_utils.py
+D  yolo-dbfd/utils/ui/__init__.py
+D  yolo-dbfd/utils/ui/ji.py
+D  yolo-dbfd/utils/ui/server_main.py
+D  yolo-dbfd/utils/ui/train_server.py
+D  yolo-dbfd/utils/ui/x.py
+D  yolo-dbfd/val.py
+D  yolo-dbfd/window.py
+[周四 2025/12/25  0:14:13.60] Committing changes... 
+[main d3d23ea] Auto-commit: 周四 2025/12/25  0:14:13.43
+ 79 files changed, 82 insertions(+), 11905 deletions(-)
+ create mode 100644 install_dependencies.bat
+ rename tools/run_labeling.bat => run_labeling.bat (64%)
+ delete mode 100644 yolo-dbfd/Arial.ttf
+ delete mode 100644 yolo-dbfd/data/Argoverse.yaml
+ delete mode 100644 yolo-dbfd/data/GlobalWheat2020.yaml
+ delete mode 100644 yolo-dbfd/data/Objects365.yaml
+ delete mode 100644 yolo-dbfd/data/SKU-110K.yaml
+ delete mode 100644 yolo-dbfd/data/VOC.yaml
+ delete mode 100644 yolo-dbfd/data/VisDrone.yaml
+ delete mode 100644 yolo-dbfd/data/coco.yaml
+ delete mode 100644 yolo-dbfd/data/coco128.yaml
+ delete mode 100644 yolo-dbfd/data/data.yaml
+ delete mode 100644 yolo-dbfd/data/fire_data.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.finetune.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.finetune_objects365.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.scratch-high.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.scratch-low.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.scratch-med.yaml
+ delete mode 100644 yolo-dbfd/data/hyps/hyp.scratch.yaml
+ delete mode 100644 yolo-dbfd/data/mask_data.yaml
+ delete mode 100644 yolo-dbfd/data/scripts/download_weights.sh
+ delete mode 100644 yolo-dbfd/data/scripts/get_coco.sh
+ delete mode 100644 yolo-dbfd/data/scripts/get_coco128.sh
+ delete mode 100644 yolo-dbfd/data/xView.yaml
+ delete mode 100644 yolo-dbfd/data_gen.py
+ delete mode 100644 yolo-dbfd/detect.py
+ delete mode 100644 yolo-dbfd/docs/Dockerfile
+ delete mode 100644 yolo-dbfd/docs/README.md
+ delete mode 100644 yolo-dbfd/docs/tutorial.ipynb
+ delete mode 100644 yolo-dbfd/export.py
+ delete mode 100644 yolo-dbfd/hubconf.py
+ delete mode 100644 yolo-dbfd/images/UI/logo.jpeg
+ delete mode 100644 yolo-dbfd/images/UI/right.jpeg
+ delete mode 100644 yolo-dbfd/images/UI/up.jpeg
+ delete mode 100644 yolo-dbfd/images/right.jpeg
+ delete mode 100644 yolo-dbfd/setup.cfg
+ delete mode 100644 yolo-dbfd/train.py
+ delete mode 100644 "yolo-dbfd/train_\346\226\260.py"
+ delete mode 100644 yolo-dbfd/utils/__init__.py
+ delete mode 100644 yolo-dbfd/utils/activations.py
+ delete mode 100644 yolo-dbfd/utils/augmentations.py
+ delete mode 100644 yolo-dbfd/utils/autoanchor.py
+ delete mode 100644 yolo-dbfd/utils/autobatch.py
+ delete mode 100644 yolo-dbfd/utils/aws/__init__.py
+ delete mode 100644 yolo-dbfd/utils/aws/mime.sh
+ delete mode 100644 yolo-dbfd/utils/aws/resume.py
+ delete mode 100644 yolo-dbfd/utils/aws/userdata.sh
+ delete mode 100644 yolo-dbfd/utils/callbacks.py
+ delete mode 100644 yolo-dbfd/utils/datasets.py
+ delete mode 100644 yolo-dbfd/utils/datasets_not_print.py
+ delete mode 100644 yolo-dbfd/utils/downloads.py
+ delete mode 100644 yolo-dbfd/utils/flask_rest_api/README.md
+ delete mode 100644 yolo-dbfd/utils/flask_rest_api/example_request.py
+ delete mode 100644 yolo-dbfd/utils/flask_rest_api/restapi.py
+ delete mode 100644 yolo-dbfd/utils/general.py
+ delete mode 100644 yolo-dbfd/utils/google_app_engine/Dockerfile
+ delete mode 100644 yolo-dbfd/utils/google_app_engine/additional_requirements.txt
+ delete mode 100644 yolo-dbfd/utils/google_app_engine/app.yaml
+ delete mode 100644 yolo-dbfd/utils/loggers/__init__.py
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/README.md
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/__init__.py
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/log_dataset.py
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/sweep.py
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/sweep.yaml
+ delete mode 100644 yolo-dbfd/utils/loggers/wandb/wandb_utils.py
+ delete mode 100644 yolo-dbfd/utils/loss.py
+ delete mode 100644 yolo-dbfd/utils/metrics.py
+ delete mode 100644 yolo-dbfd/utils/plots.py
+ delete mode 100644 yolo-dbfd/utils/torch_utils.py
+ delete mode 100644 yolo-dbfd/utils/ui/__init__.py
+ delete mode 100644 yolo-dbfd/utils/ui/ji.py
+ delete mode 100644 yolo-dbfd/utils/ui/server_main.py
+ delete mode 100644 yolo-dbfd/utils/ui/train_server.py
+ delete mode 100644 yolo-dbfd/utils/ui/x.py
+ delete mode 100644 yolo-dbfd/val.py
+ delete mode 100644 yolo-dbfd/window.py
+[周四 2025/12/25  0:14:13.77] Commit successful. 
+[周四 2025/12/25  0:14:13.77] Pulling updates from remote... 
+error: cannot pull with rebase: You have unstaged changes.
+error: Please commit or stash them.
+[周四 2025/12/25  0:14:13.84] [WARN] Pull failed (conflicts or no upstream). Attempting push anyway... 
+[周四 2025/12/25  0:14:13.97] Files to be pushed: 
+[周四 2025/12/25  0:33:50.38] =================================================== 
+[周四 2025/12/25  0:33:50.38] Starting Sync Cycle... 
+[周四 2025/12/25  0:33:50.55] Current Branch: main 
+[周四 2025/12/25  0:33:50.57] Checking for local changes... 

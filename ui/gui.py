@@ -56,7 +56,10 @@ class AlgorithmWorker(QThread):
         elif self.source_type == 'image':
             img = cv2.imread(self.source_path)
             if img is not None:
-                self.process_frame(img)
+                vis, has_fire = self.process_frame(img)
+                # Auto-save processed image as requested
+                self.output_manager.save_prediction(vis, [], metadata={"source": self.source_path, "has_fire": has_fire})
+                self.result_signal.emit(vis, 0.0, has_fire)
             self.running = False
             return
 
