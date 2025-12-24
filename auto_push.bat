@@ -44,12 +44,11 @@ if "%CURRENT_REMOTE%"=="" (
 )
 
 REM --- 3. Detect/Create Branch ---
-set "BRANCH="
-for /f "delims=" %%i in ('git branch --show-current 2^>nul') do set "BRANCH=%%i"
-
-if "%BRANCH%"=="" (
+set "BRANCH=main"
+git checkout main >nul 2>&1
+if %errorlevel% neq 0 (
+    call :Log "[INFO] Creating main branch..."
     git checkout -b main >nul 2>&1
-    set "BRANCH=main"
 )
 call :Log "Current Branch: %BRANCH%"
 

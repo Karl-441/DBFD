@@ -358,3 +358,214 @@ error: Please commit or stash them.
 [周三 2025/12/24 23:54:36.52] [INFO] Remote 'origin' not found. Setting to git@github.com:Karl-441/DBFD.git... 
 [周三 2025/12/24 23:54:36.66] Current Branch: master 
 [周三 2025/12/24 23:54:36.66] Checking for local changes... 
+[周三 2025/12/24 23:54:37.07] Changes detected. Files to be committed: 
+A  .gitignore
+A  algorithm/features.py
+A  algorithm/fusion.py
+A  algorithm/pnn.py
+A  algorithm/preprocess.py
+AM auto_git_dbfd.log
+A  auto_push.bat
+A  core/dataset_manager.py
+A  core/output_manager.py
+A  core/pi_compat/check_pi.py
+A  docs/PERFORMANCE_REPORT.md
+A  docs/USER_MANUAL.md
+A  main.py
+A  requirements.txt
+A  run_ui.bat
+A  tests/performance_test.py
+A  tools/auto_train_yolo.py
+A  tools/labeling_tool.py
+A  tools/run_labeling.bat
+A  train_pnn.py
+A  ui/data_manager_ui.py
+A  ui/gui.py
+A  yolo-dbfd/Arial.ttf
+A  yolo-dbfd/data/Argoverse.yaml
+A  yolo-dbfd/data/GlobalWheat2020.yaml
+A  yolo-dbfd/data/Objects365.yaml
+A  yolo-dbfd/data/SKU-110K.yaml
+A  yolo-dbfd/data/VOC.yaml
+A  yolo-dbfd/data/VisDrone.yaml
+A  yolo-dbfd/data/coco.yaml
+A  yolo-dbfd/data/coco128.yaml
+A  yolo-dbfd/data/data.yaml
+A  yolo-dbfd/data/fire_data.yaml
+A  yolo-dbfd/data/hyps/hyp.finetune.yaml
+A  yolo-dbfd/data/hyps/hyp.finetune_objects365.yaml
+A  yolo-dbfd/data/hyps/hyp.scratch-high.yaml
+A  yolo-dbfd/data/hyps/hyp.scratch-low.yaml
+A  yolo-dbfd/data/hyps/hyp.scratch-med.yaml
+A  yolo-dbfd/data/hyps/hyp.scratch.yaml
+A  yolo-dbfd/data/mask_data.yaml
+A  yolo-dbfd/data/scripts/download_weights.sh
+A  yolo-dbfd/data/scripts/get_coco.sh
+A  yolo-dbfd/data/scripts/get_coco128.sh
+A  yolo-dbfd/data/xView.yaml
+A  yolo-dbfd/data_gen.py
+A  yolo-dbfd/detect.py
+A  yolo-dbfd/docs/Dockerfile
+A  yolo-dbfd/docs/README.md
+A  yolo-dbfd/docs/tutorial.ipynb
+A  yolo-dbfd/export.py
+A  yolo-dbfd/hubconf.py
+A  yolo-dbfd/images/UI/logo.jpeg
+A  yolo-dbfd/images/UI/right.jpeg
+A  yolo-dbfd/images/UI/up.jpeg
+A  yolo-dbfd/images/right.jpeg
+A  yolo-dbfd/setup.cfg
+A  yolo-dbfd/train.py
+A  "yolo-dbfd/train_\346\226\260.py"
+A  yolo-dbfd/utils/__init__.py
+A  yolo-dbfd/utils/activations.py
+A  yolo-dbfd/utils/augmentations.py
+A  yolo-dbfd/utils/autoanchor.py
+A  yolo-dbfd/utils/autobatch.py
+A  yolo-dbfd/utils/aws/__init__.py
+A  yolo-dbfd/utils/aws/mime.sh
+A  yolo-dbfd/utils/aws/resume.py
+A  yolo-dbfd/utils/aws/userdata.sh
+A  yolo-dbfd/utils/callbacks.py
+A  yolo-dbfd/utils/datasets.py
+A  yolo-dbfd/utils/datasets_not_print.py
+A  yolo-dbfd/utils/downloads.py
+A  yolo-dbfd/utils/flask_rest_api/README.md
+A  yolo-dbfd/utils/flask_rest_api/example_request.py
+A  yolo-dbfd/utils/flask_rest_api/restapi.py
+A  yolo-dbfd/utils/general.py
+A  yolo-dbfd/utils/google_app_engine/Dockerfile
+A  yolo-dbfd/utils/google_app_engine/additional_requirements.txt
+A  yolo-dbfd/utils/google_app_engine/app.yaml
+A  yolo-dbfd/utils/loggers/__init__.py
+A  yolo-dbfd/utils/loggers/wandb/README.md
+A  yolo-dbfd/utils/loggers/wandb/__init__.py
+A  yolo-dbfd/utils/loggers/wandb/log_dataset.py
+A  yolo-dbfd/utils/loggers/wandb/sweep.py
+A  yolo-dbfd/utils/loggers/wandb/sweep.yaml
+A  yolo-dbfd/utils/loggers/wandb/wandb_utils.py
+A  yolo-dbfd/utils/loss.py
+A  yolo-dbfd/utils/metrics.py
+A  yolo-dbfd/utils/plots.py
+A  yolo-dbfd/utils/torch_utils.py
+A  yolo-dbfd/utils/ui/__init__.py
+A  yolo-dbfd/utils/ui/ji.py
+A  yolo-dbfd/utils/ui/server_main.py
+A  yolo-dbfd/utils/ui/train_server.py
+A  yolo-dbfd/utils/ui/x.py
+A  yolo-dbfd/val.py
+A  yolo-dbfd/window.py
+A  yolo_v8_detect.py
+[周三 2025/12/24 23:54:37.21] Committing changes... 
+[master (root-commit) fd3c7a0] Auto-commit: 周三 2025/12/24 23:54:37.07
+ 97 files changed, 14852 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 algorithm/features.py
+ create mode 100644 algorithm/fusion.py
+ create mode 100644 algorithm/pnn.py
+ create mode 100644 algorithm/preprocess.py
+ create mode 100644 auto_git_dbfd.log
+ create mode 100644 auto_push.bat
+ create mode 100644 core/dataset_manager.py
+ create mode 100644 core/output_manager.py
+ create mode 100644 core/pi_compat/check_pi.py
+ create mode 100644 docs/PERFORMANCE_REPORT.md
+ create mode 100644 docs/USER_MANUAL.md
+ create mode 100644 main.py
+ create mode 100644 requirements.txt
+ create mode 100644 run_ui.bat
+ create mode 100644 tests/performance_test.py
+ create mode 100644 tools/auto_train_yolo.py
+ create mode 100644 tools/labeling_tool.py
+ create mode 100644 tools/run_labeling.bat
+ create mode 100644 train_pnn.py
+ create mode 100644 ui/data_manager_ui.py
+ create mode 100644 ui/gui.py
+ create mode 100644 yolo-dbfd/Arial.ttf
+ create mode 100644 yolo-dbfd/data/Argoverse.yaml
+ create mode 100644 yolo-dbfd/data/GlobalWheat2020.yaml
+ create mode 100644 yolo-dbfd/data/Objects365.yaml
+ create mode 100644 yolo-dbfd/data/SKU-110K.yaml
+ create mode 100644 yolo-dbfd/data/VOC.yaml
+ create mode 100644 yolo-dbfd/data/VisDrone.yaml
+ create mode 100644 yolo-dbfd/data/coco.yaml
+ create mode 100644 yolo-dbfd/data/coco128.yaml
+ create mode 100644 yolo-dbfd/data/data.yaml
+ create mode 100644 yolo-dbfd/data/fire_data.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.finetune.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.finetune_objects365.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.scratch-high.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.scratch-low.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.scratch-med.yaml
+ create mode 100644 yolo-dbfd/data/hyps/hyp.scratch.yaml
+ create mode 100644 yolo-dbfd/data/mask_data.yaml
+ create mode 100644 yolo-dbfd/data/scripts/download_weights.sh
+ create mode 100644 yolo-dbfd/data/scripts/get_coco.sh
+ create mode 100644 yolo-dbfd/data/scripts/get_coco128.sh
+ create mode 100644 yolo-dbfd/data/xView.yaml
+ create mode 100644 yolo-dbfd/data_gen.py
+ create mode 100644 yolo-dbfd/detect.py
+ create mode 100644 yolo-dbfd/docs/Dockerfile
+ create mode 100644 yolo-dbfd/docs/README.md
+ create mode 100644 yolo-dbfd/docs/tutorial.ipynb
+ create mode 100644 yolo-dbfd/export.py
+ create mode 100644 yolo-dbfd/hubconf.py
+ create mode 100644 yolo-dbfd/images/UI/logo.jpeg
+ create mode 100644 yolo-dbfd/images/UI/right.jpeg
+ create mode 100644 yolo-dbfd/images/UI/up.jpeg
+ create mode 100644 yolo-dbfd/images/right.jpeg
+ create mode 100644 yolo-dbfd/setup.cfg
+ create mode 100644 yolo-dbfd/train.py
+ create mode 100644 "yolo-dbfd/train_\346\226\260.py"
+ create mode 100644 yolo-dbfd/utils/__init__.py
+ create mode 100644 yolo-dbfd/utils/activations.py
+ create mode 100644 yolo-dbfd/utils/augmentations.py
+ create mode 100644 yolo-dbfd/utils/autoanchor.py
+ create mode 100644 yolo-dbfd/utils/autobatch.py
+ create mode 100644 yolo-dbfd/utils/aws/__init__.py
+ create mode 100644 yolo-dbfd/utils/aws/mime.sh
+ create mode 100644 yolo-dbfd/utils/aws/resume.py
+ create mode 100644 yolo-dbfd/utils/aws/userdata.sh
+ create mode 100644 yolo-dbfd/utils/callbacks.py
+ create mode 100644 yolo-dbfd/utils/datasets.py
+ create mode 100644 yolo-dbfd/utils/datasets_not_print.py
+ create mode 100644 yolo-dbfd/utils/downloads.py
+ create mode 100644 yolo-dbfd/utils/flask_rest_api/README.md
+ create mode 100644 yolo-dbfd/utils/flask_rest_api/example_request.py
+ create mode 100644 yolo-dbfd/utils/flask_rest_api/restapi.py
+ create mode 100644 yolo-dbfd/utils/general.py
+ create mode 100644 yolo-dbfd/utils/google_app_engine/Dockerfile
+ create mode 100644 yolo-dbfd/utils/google_app_engine/additional_requirements.txt
+ create mode 100644 yolo-dbfd/utils/google_app_engine/app.yaml
+ create mode 100644 yolo-dbfd/utils/loggers/__init__.py
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/README.md
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/__init__.py
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/log_dataset.py
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/sweep.py
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/sweep.yaml
+ create mode 100644 yolo-dbfd/utils/loggers/wandb/wandb_utils.py
+ create mode 100644 yolo-dbfd/utils/loss.py
+ create mode 100644 yolo-dbfd/utils/metrics.py
+ create mode 100644 yolo-dbfd/utils/plots.py
+ create mode 100644 yolo-dbfd/utils/torch_utils.py
+ create mode 100644 yolo-dbfd/utils/ui/__init__.py
+ create mode 100644 yolo-dbfd/utils/ui/ji.py
+ create mode 100644 yolo-dbfd/utils/ui/server_main.py
+ create mode 100644 yolo-dbfd/utils/ui/train_server.py
+ create mode 100644 yolo-dbfd/utils/ui/x.py
+ create mode 100644 yolo-dbfd/val.py
+ create mode 100644 yolo-dbfd/window.py
+ create mode 100644 yolo_v8_detect.py
+[周三 2025/12/24 23:54:37.42] Commit successful. 
+[周三 2025/12/24 23:54:37.42] Pulling updates from remote... 
+error: cannot pull with rebase: You have unstaged changes.
+error: Please commit or stash them.
+[周三 2025/12/24 23:54:37.50] [WARN] Pull failed (conflicts or no upstream). Attempting push anyway... 
+[周三 2025/12/24 23:54:37.64] Pushing to remote... 
+[周三 2025/12/24 23:54:43.05] [SUCCESS] Push Successful. 
+[周三 2025/12/24 23:54:43.05] Process Finished. 
+[周三 2025/12/24 23:54:43.06] =================================================== 
+[周四 2025/12/25  0:00:42.95] =================================================== 
+[周四 2025/12/25  0:00:42.96] Starting Sync Cycle... 
+[周四 2025/12/25  0:00:43.14] Current Branch: main 
+[周四 2025/12/25  0:00:43.14] Checking for local changes... 
