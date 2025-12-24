@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Data
+dataset/
+dbfd_dataset/
+output/
+runs/
+*.jpg
+*.png
+*.avi
+*.mp4
+
+# Models (Large files)
+*.pt
+*.pkl
+models/
+!models/yolov8n.pt
+
+# IDE
+.vscode/
+.idea/
+
+# Security
+gh_key
+*.key
+*.pem
+id_rsa
+id_rsa.pub
