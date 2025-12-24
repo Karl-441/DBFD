@@ -5,7 +5,8 @@ REM This script activates the virtual environment and starts the GUI
 cd /d "%~dp0"
 
 IF NOT EXIST "venv\Scripts\activate.bat" (
-    echo Virtual environment not found. Please create it first.
+    echo [ERROR] Virtual environment not found.
+    echo Please run 'install_dependencies.bat' first to set up the environment.
     pause
     exit /b
 )

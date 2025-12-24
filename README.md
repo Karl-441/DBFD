@@ -26,10 +26,13 @@ DBFD is a comprehensive fire detection system designed for drone-based surveilla
     ```
 
 2.  **Install dependencies**:
+    Double-click or run:
     ```bash
-    pip install -r requirements.txt
+    install_dependencies.bat
     ```
-    *Note: For GPU acceleration, ensure you have the correct PyTorch version installed.*
+    This will automatically create a virtual environment (`venv`) and install all required packages.
+
+    *Note: For GPU acceleration, ensure you have the correct PyTorch version installed manually if needed, though default installation should work for most.*
 
 ## 🖥️ Usage
 
@@ -53,7 +56,7 @@ python tools/auto_train_yolo.py
 ### 3. Data Labeling
 Launch the standalone labeling tool:
 ```bash
-tools/run_labeling.bat
+run_labeling.bat
 ```
 
 ## 📂 Project Structure
