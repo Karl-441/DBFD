@@ -30,7 +30,6 @@ if not exist ".git" (
 )
 
 REM --- 2. Configure Remote (Force SSH) ---
-REM Check if remote exists and matches SSH format
 for /f "tokens=*" %%i in ('git remote get-url origin 2^>nul') do set "CURRENT_REMOTE=%%i"
 
 if "%CURRENT_REMOTE%"=="" (
@@ -45,10 +44,12 @@ if "%CURRENT_REMOTE%"=="" (
 
 REM --- 3. Detect/Create Branch ---
 set "BRANCH=main"
-git checkout main >nul 2>&1
+git branch --list %BRANCH% >nul 2>&1
 if %errorlevel% neq 0 (
-    call :Log "[INFO] Creating main branch..."
-    git checkout -b main >nul 2>&1
+    call :Log "[INFO] Creating local branch %BRANCH%..."
+    git checkout -b %BRANCH% >nul 2>&1
+) else (
+    git checkout %BRANCH% >nul 2>&1
 )
 call :Log "Current Branch: %BRANCH%"
 
@@ -63,7 +64,6 @@ if %errorlevel% equ 0 (
 ) else (
     call :Log "Changes detected. Files to be committed:"
     
-    REM Show status to console and log
     echo ------------------------------------------
     git status --short
     echo ------------------------------------------
@@ -80,51 +80,61 @@ if %errorlevel% equ 0 (
     )
 )
 
-REM --- 5. Pull (Rebase) ---
-call :Log "Pulling updates from remote..."
-git pull origin %BRANCH% --rebase >> "%LOGFILE%" 2>&1
-if %errorlevel% neq 0 (
-    call :Log "[WARN] Pull failed (conflicts or no upstream). Attempting push anyway..."
+REM --- 5. Fetch and Pull ---
+call :Log "Fetching updates from remote..."
+git fetch origin >> "%LOGFILE%" 2>&1
+
+REM Check if remote branch exists
+git rev-parse --verify origin/%BRANCH% >nul 2>&1
+if %errorlevel% equ 0 (
+    call :Log "Pulling updates from remote..."
+    git pull origin %BRANCH% --rebase >> "%LOGFILE%" 2>&1
+    if !errorlevel! neq 0 (
+        call :Log "[WARN] Pull failed (conflicts?). Attempting push anyway..."
+    ) else (
+        call :Log "Pull successful."
+    )
 ) else (
-    call :Log "Pull successful."
+    call :Log "[INFO] Remote branch origin/%BRANCH% does not exist yet. Skipping pull."
 )
 
 REM --- 6. Push ---
-REM Check what will be pushed
-set "HAS_PUSH_CHANGES="
-for /f "tokens=*" %%a in ('git diff --stat origin/%BRANCH%..HEAD 2^>nul') do (
-    set "HAS_PUSH_CHANGES=1"
-)
+set "SHOULD_PUSH=0"
 
-if defined HAS_PUSH_CHANGES (
-    call :Log "Files to be pushed:"
-    echo ------------------------------------------
-    git diff --stat origin/%BRANCH%..HEAD
-    echo ------------------------------------------
-    git diff --stat origin/%BRANCH%..HEAD >> "%LOGFILE%"
-) else (
-    REM Check if ahead
-    git rev-list origin/%BRANCH%..HEAD --count > temp_ahead.txt 2>nul
-    if exist temp_ahead.txt (
-        set /p AHEAD_COUNT=<temp_ahead.txt
-        del temp_ahead.txt
-    ) else (
-        set AHEAD_COUNT=1
-    )
+REM Check if remote exists to diff against
+git rev-parse --verify origin/%BRANCH% >nul 2>&1
+if %errorlevel% equ 0 (
+    REM Check for unpushed commits
+    git diff --stat origin/%BRANCH%..HEAD > temp_diff.txt 2>nul
+    for %%A in (temp_diff.txt) do if %%~zA gtr 0 set "SHOULD_PUSH=1"
     
-    if "!AHEAD_COUNT!"=="0" (
+    if "!SHOULD_PUSH!"=="1" (
+        call :Log "Files to be pushed:"
+        type temp_diff.txt
+        type temp_diff.txt >> "%LOGFILE%"
+    ) else (
         call :Log "Local branch is up to date with remote. Nothing to push."
-        goto :End
     )
+    del temp_diff.txt
+) else (
+    REM Remote doesn't exist, must push
+    set "SHOULD_PUSH=1"
+    call :Log "[INFO] First push to new remote branch."
 )
 
-call :Log "Pushing to remote..."
-echo [INFO] Using SSH Key: %SSH_KEY%
-git push origin %BRANCH%
-if %errorlevel% neq 0 (
-    call :Log "[ERROR] Push Failed. Check log/network."
-) else (
-    call :Log "[SUCCESS] Push Successful."
+if "!SHOULD_PUSH!"=="1" (
+    call :Log "Pushing to remote..."
+    echo [INFO] Using SSH Key: %SSH_KEY%
+    
+    REM Use -u to set upstream tracking
+    git push -u origin %BRANCH% >> "%LOGFILE%" 2>&1
+    
+    if !errorlevel! neq 0 (
+        call :Log "[ERROR] Push Failed. Check log/network."
+        echo [ERROR] Push Failed. Check auto_git_dbfd.log for details.
+    ) else (
+        call :Log "[SUCCESS] Push Successful."
+    )
 )
 
 :End
