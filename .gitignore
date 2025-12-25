@@ -31,3 +31,7 @@ gh_key
 *.pem
 id_rsa
 id_rsa.pub
+
+# Other
+autopush.bat
+auto_git_dbfd.log
