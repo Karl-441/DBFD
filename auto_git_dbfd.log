@@ -811,3 +811,35 @@ error: Please commit or stash them.
 [周四 2025/12/25  0:43:38.76] Starting Sync Cycle... 
 [周四 2025/12/25  0:43:38.98] Current Branch: main 
 [周四 2025/12/25  0:43:38.98] Checking for local changes... 
+[周四 2025/12/25  0:43:39.12] Changes detected. Files to be committed: 
+A  asd
+MM auto_git_dbfd.log
+M  auto_push.bat
+[周四 2025/12/25  0:43:39.25] Committing changes... 
+[main 62a99fd] Auto-commit: 周四 2025/12/25  0:43:39.12
+ 3 files changed, 146 insertions(+), 40 deletions(-)
+ create mode 100644 asd
+[周四 2025/12/25  0:43:39.37] Commit successful. 
+[周四 2025/12/25  0:43:39.38] Fetching updates from remote... 
+Warning: Permanently added '[ssh.github.com]:443' (ED25519) to the list of known hosts.
+[周四 2025/12/25  0:43:43.22] Pulling updates from remote... 
+error: cannot pull with rebase: You have unstaged changes.
+error: Please commit or stash them.
+[周四 2025/12/25  0:43:43.28] [WARN] Pull failed (conflicts?). Attempting push anyway... 
+[周四 2025/12/25  0:43:43.42] Files to be pushed: 
+ asd               | 81 +++++++++++++++++++++++++++++++++++++++++++++++++
+ auto_git_dbfd.log | 15 ++++++++++
+ auto_push.bat     | 90 ++++++++++++++++++++++++++++++-------------------------
+ 3 files changed, 146 insertions(+), 40 deletions(-)
+[周四 2025/12/25  0:43:43.42] Pushing to remote... 
+Warning: Permanently added '[ssh.github.com]:443' (ED25519) to the list of known hosts.
+branch 'main' set up to track 'origin/main'.
+To github.com:Karl-441/DBFD.git
+   3b38a34..62a99fd  main -> main
+[周四 2025/12/25  0:43:47.03] [SUCCESS] Push Successful. 
+[周四 2025/12/25  0:43:47.03] Process Finished. 
+[周四 2025/12/25  0:43:47.03] =================================================== 
+[周四 2025/12/25 10:04:06.62] =================================================== 
+[周四 2025/12/25 10:04:06.62] Starting Sync Cycle... 
+[周四 2025/12/25 10:04:06.82] Current Branch: main 
+[周四 2025/12/25 10:04:06.83] Checking for local changes... 

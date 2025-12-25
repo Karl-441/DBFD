@@ -192,12 +192,35 @@ class MainWindow(QMainWindow):
         self.recording = False
         self.video_writer = None
         
-    def load_pnn_model(self):
+    def load_pnn_model(self, path=None):
         try:
-            with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "model_pnn.pkl"), 'rb') as f:
-                self.pnn_model = pickle.load(f)
-        except:
+            if not path:
+                # Try pnn_latest.pkl first, then model_pnn.pkl
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+                # Check models dir first
+                path = os.path.join(base_dir, "models", "pnn_latest.pkl")
+                if not os.path.exists(path):
+                     # Fallback to legacy path
+                     path = os.path.join(base_dir, "model_pnn.pkl")
+            
+            # Handle just filename passed from combo box
+            if not os.path.exists(path):
+                alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", path)
+                if os.path.exists(alt_path):
+                    path = alt_path
+
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    self.pnn_model = pickle.load(f)
+                print(f"Loaded PNN model: {path}")
+                return True
+            else:
+                self.pnn_model = None
+                return False
+        except Exception as e:
+            print(f"Error loading PNN: {e}")
             self.pnn_model = None
+            return False
 
     def load_yolo_model(self, path):
         try:
@@ -265,12 +288,19 @@ class MainWindow(QMainWindow):
         self.combo_algo.currentIndexChanged.connect(self.change_algorithm)
         algo_layout.addWidget(self.combo_algo)
         
+        # PNN Model Selector
+        algo_layout.addWidget(QLabel("PNN Model:"))
+        self.combo_pnn = QComboBox()
+        self.refresh_pnn_list()
+        self.combo_pnn.currentIndexChanged.connect(self.change_pnn_model)
+        algo_layout.addWidget(self.combo_pnn)
+
         # YOLO Model Selector
         algo_layout.addWidget(QLabel("YOLO Model:"))
-        self.combo_model = QComboBox()
-        self.refresh_model_list()
-        self.combo_model.currentIndexChanged.connect(self.change_yolo_model)
-        algo_layout.addWidget(self.combo_model)
+        self.combo_yolo = QComboBox()
+        self.refresh_yolo_list()
+        self.combo_yolo.currentIndexChanged.connect(self.change_yolo_model)
+        algo_layout.addWidget(self.combo_yolo)
         
         self.btn_start = QPushButton("Start Processing")
         self.btn_start.clicked.connect(self.start_processing)
@@ -320,22 +350,45 @@ class MainWindow(QMainWindow):
         self.source_type = None
         self.source_path = None
 
-    def refresh_model_list(self):
-        self.combo_model.clear()
+    def refresh_yolo_list(self):
+        self.combo_yolo.clear()
         # Add default
-        self.combo_model.addItem("yolov8n.pt")
+        self.combo_yolo.addItem("yolov8n.pt")
         
         # Scan models/ dir
         models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
         if os.path.exists(models_dir):
             files = glob.glob(os.path.join(models_dir, "*.pt"))
             for f in files:
-                self.combo_model.addItem(os.path.basename(f))
+                self.combo_yolo.addItem(os.path.basename(f))
+
+    def refresh_pnn_list(self):
+        self.combo_pnn.clear()
+        # Legacy/Default
+        self.combo_pnn.addItem("pnn_latest.pkl")
+        self.combo_pnn.addItem("model_pnn.pkl")
+        
+        models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
+        if os.path.exists(models_dir):
+            files = glob.glob(os.path.join(models_dir, "*.pkl"))
+            for f in files:
+                name = os.path.basename(f)
+                if name != "pnn_latest.pkl": 
+                    self.combo_pnn.addItem(name)
                 
     def change_yolo_model(self):
-        model_name = self.combo_model.currentText()
+        model_name = self.combo_yolo.currentText()
         if self.load_yolo_model(model_name):
             self.lbl_status.setText(f"Loaded: {model_name}")
+            # If running, restart
+            if self.worker and self.worker.isRunning():
+                self.stop_processing()
+                self.start_processing()
+
+    def change_pnn_model(self):
+        model_name = self.combo_pnn.currentText()
+        if self.load_pnn_model(model_name):
+            self.lbl_status.setText(f"Loaded PNN: {model_name}")
             # If running, restart
             if self.worker and self.worker.isRunning():
                 self.stop_processing()
