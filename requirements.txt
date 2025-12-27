@@ -1,7 +1,8 @@
-opencv-python
-numpy
+psutil
 scikit-image
 scipy
-ultralytics
-PyQt6
 mss
+# Core dependencies (try installing via apt first on Pi: sudo apt install python3-opencv python3-pyqt6)
+opencv-python
+PyQt6
+ultralytics

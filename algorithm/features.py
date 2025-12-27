@@ -1,6 +1,11 @@
 import cv2
 import numpy as np
-from skimage.feature import graycomatrix, graycoprops
+try:
+    from skimage.feature import graycomatrix, graycoprops
+except ImportError:
+    graycomatrix = None
+    graycoprops = None
+    print("Warning: scikit-image not found. Texture features (GLCM) will be zeroed.")
 
 def extract_ycbcr_features(img, mask):
     """
@@ -44,6 +49,10 @@ def extract_glcm_features(img, mask):
     
     # If ROI is too small, return 0
     if roi.shape[0] < 2 or roi.shape[1] < 2:
+        return [0.0] * 8
+
+    # Check for skimage availability
+    if graycomatrix is None:
         return [0.0] * 8
 
     # Compute GLCM

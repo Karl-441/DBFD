@@ -3,7 +3,13 @@ import cv2
 import numpy as np
 import time
 import os
-import mss
+import gc
+import config
+try:
+    import mss
+except ImportError:
+    mss = None
+    print("Warning: 'mss' library not found. Screen capture disabled.")
 import glob
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QImage, QPixmap, QAction, QIcon
@@ -25,7 +31,12 @@ from algorithm.fusion import FusionDetector
 from core.output_manager import OutputManager
 from ui.data_manager_ui import DataManagerUI
 import pickle
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
+    print("Warning: Ultralytics not installed. YOLO disabled.")
 
 class AlgorithmWorker(QThread):
     result_signal = pyqtSignal(object, object, bool) # image, fps, has_fire
@@ -50,6 +61,10 @@ class AlgorithmWorker(QThread):
         if self.source_type == 'video' or self.source_type == 'camera':
             cap = cv2.VideoCapture(self.source_path)
         elif self.source_type == 'screen':
+            if mss is None:
+                print("Error: Screen capture requires 'mss' library.")
+                self.running = False
+                return
             sct = mss.mss()
             monitor = sct.monitors[1] # Primary monitor
             
@@ -91,10 +106,17 @@ class AlgorithmWorker(QThread):
                 fps = 1.0 / (time.time() - start_time)
                 self.result_signal.emit(res_frame, fps, has_fire)
                 
+                # Clean up immediately
+                del frame
+                
                 # Log metrics every 100 frames
                 self.frame_count += 1
                 if self.frame_count % 100 == 0:
                     self.output_manager.log_metric("fps", fps)
+                
+                # Force GC based on config interval
+                if self.frame_count % config.GC_INTERVAL == 0:
+                    gc.collect() 
             else:
                 time.sleep(0.01)
                 
@@ -223,6 +245,10 @@ class MainWindow(QMainWindow):
             return False
 
     def load_yolo_model(self, path):
+        if YOLO is None:
+            self.yolo_model = None
+            return False
+            
         try:
             # Check if path is just a name, look in models/
             if not os.path.exists(path):
@@ -271,6 +297,10 @@ class MainWindow(QMainWindow):
         self.btn_camera.clicked.connect(self.start_camera)
         self.btn_screen = QPushButton("Screen Capture")
         self.btn_screen.clicked.connect(self.start_screen)
+        if mss is None:
+            self.btn_screen.setEnabled(False)
+            self.btn_screen.setToolTip("Install 'mss' to enable screen capture")
+        
         self.btn_video_file = QPushButton("Open Video File")
         self.btn_video_file.clicked.connect(self.upload_video)
         input_layout.addWidget(self.btn_upload)
@@ -471,7 +501,10 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: gray; font-weight: bold;")
         
     def update_display(self, frame, fps, has_fire):
-        self.current_image = frame
+        # Optimization: Don't keep a strong ref to current_image if not needed
+        # Or make sure to replace it properly. 
+        # Here we do self.current_image = frame, which releases the old frame.
+        self.current_image = frame 
         self.lbl_fps.setText(f"FPS: {fps:.2f}")
         
         # Fire Alert Overlay
@@ -480,18 +513,36 @@ class MainWindow(QMainWindow):
             overlay = frame.copy()
             cv2.rectangle(overlay, (0, 0), (300, 50), (0, 0, 255), -1)
             cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+            del overlay
             
             # Draw text
             cv2.putText(frame, "WARNING: FIRE DETECTED!", (10, 35), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
+        # QImage holds a copy of data, so we can delete intermediate cv2 frames
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
-        qt_image = QImage(rgb_image.data, w, h, ch * w, QImage.Format.Format_RGB888)
-        self.display_label.setPixmap(QPixmap.fromImage(qt_image).scaled(self.display_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
+        bytes_per_line = ch * w
+        
+        # Create QImage
+        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        
+        # Scale and display (using SmoothTransformation is better quality but slower, Fast is better for memory/speed)
+        # Using FastTransformation for performance
+        pixmap = QPixmap.fromImage(qt_image).scaled(
+            self.display_label.size(), 
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation
+        )
+        self.display_label.setPixmap(pixmap)
         
         if self.recording and self.video_writer:
             self.video_writer.write(frame)
+        
+        # Cleanup locals to be safe
+        del rgb_image
+        del qt_image
+        del pixmap
 
     def save_image(self):
         if self.current_image is not None:

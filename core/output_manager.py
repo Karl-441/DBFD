@@ -3,6 +3,7 @@ import datetime
 import shutil
 import json
 import cv2
+import numpy as np
 
 class OutputManager:
     def __init__(self, base_dir=None):
@@ -57,9 +58,31 @@ class OutputManager:
         # Save Metadata (JSON)
         if metadata or detections:
             json_path = img_path.replace(os.path.splitext(filename)[1], ".json")
+            
+            # Helper to convert numpy types to native types
+            def convert_numpy(obj):
+                if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+                                    np.int16, np.int32, np.int64, np.uint8,
+                                    np.uint16, np.uint32, np.uint64)):
+                    return int(obj)
+                elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+                    return float(obj)
+                elif isinstance(obj, (np.ndarray,)):
+                    return obj.tolist()
+                return obj
+
+            # Recursively convert detections if they contain numpy types
+            # Detections is typically a list of tuples/lists
+            serializable_detections = []
+            for d in detections:
+                if isinstance(d, (list, tuple)):
+                    serializable_detections.append([convert_numpy(x) for x in d])
+                else:
+                    serializable_detections.append(convert_numpy(d))
+
             data = {
                 "timestamp": datetime.datetime.now().isoformat(),
-                "detections": detections,
+                "detections": serializable_detections,
                 "metadata": metadata or {}
             }
             with open(json_path, 'w') as f:

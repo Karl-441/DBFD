@@ -1,0 +1,15 @@
+[Unit]
+Description=DBFD Fire Detection Service
+After=network.target video.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/DBFD-Raspberry
+ExecStart=/usr/bin/python3 /home/pi/DBFD-Raspberry/main.py --headless
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
