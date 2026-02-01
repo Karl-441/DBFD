@@ -1,27 +1,87 @@
 import os
 
-# Hardware Constraints
-# Raspberry Pi 4B (Optimized for low memory usage)
-MAX_MEMORY_MB = 350  # Lowered threshold for GUI mode safety
-GC_INTERVAL = 100 # Frames between forced garbage collection
+"""
+配置文件
+    定义项目的全局配置参数，包括硬件限制、报警设置、摄像头参数、算法选择和文件路径等。
+"""
 
-# Camera Settings
-USE_LIBCAMERA = False # Set to True to use Picamera2 (rpicam) instead of OpenCV VideoCapture
-CAMERA_INDEX = 0  # Default camera
-FRAME_WIDTH = 320  # Reduced resolution for performance and memory (320x240 is enough for fire detection)
-FRAME_HEIGHT = 240
-FPS = 10  # Lower FPS to save CPU and reduce frame buffering pressure
+# ==========================================
+# 硬件约束
+# ==========================================
+# 最大内存使用限制 (MB)，用于防止系统崩溃。降低此值可提高GUI模式下的稳定性。
+MAX_MEMORY_MB = 1024
+# 垃圾回收间隔，每处理多少帧强制执行一次垃圾回收
+GC_INTERVAL = 30 
 
-# Algorithm Settings
-USE_PNN = True  # Default to PNN (lighter)
-USE_YOLO = False  # Disable YOLO by default on 1GB Pi
+# ==========================================
+# 性能优化配置
+# ==========================================
+# 检测间隔 (每 N 帧执行一次检测)
+# 增大此值可显著提高 FPS，但会增加检测延迟
+DETECT_INTERVAL = 3
 
-# Paths
+# PNN 处理分辨率目标尺寸
+# PNN 算法将在该分辨率下进行特征提取和分类
+# 减小尺寸可显著降低计算量，但过小可能丢失纹理特征
+# 推荐值: (160, 120) 适用于大多数情况
+PNN_TARGET_WIDTH = 160
+PNN_TARGET_HEIGHT = 120
+
+# PNN 训练样本最大数量 (每类)
+# 限制存储在内存中的 PNN 模式向量数量，防止内存爆炸
+PNN_MAX_SAMPLES = 100
+
+# ==========================================
+# 报警设置 
+# ==========================================
+# 报警模块的GPIO引脚编号
+# 对应物理引脚 11
+ALARM_GPIO_PIN = 17  
+# 报警触发电平
+# False 表示低电平触发，True 表示高电平触发
+ALARM_ACTIVE_HIGH = True 
+# 报警冷却时间 (秒)
+# 检测到火灾后报警器保持开启的最短时间，防止频繁启停
+ALARM_COOLDOWN = 5.0 
+
+# ==========================================
+# 摄像头设置 
+# ==========================================
+# 是否使用 Libcamera (Picamera2)
+# True: 使用 Picamera2
+# False: 使用标准 OpenCV VideoCapture
+USE_LIBCAMERA = True 
+# 默认摄像头索引 (通常 0 是默认摄像头)
+CAMERA_INDEX = 0  
+# 视频帧宽度 (分辨率宽)
+FRAME_WIDTH = 640  
+# 视频帧高度 (分辨率高)
+FRAME_HEIGHT = 480
+# 目标帧率 (FPS)
+FPS = 30  
+
+# ==========================================
+# 算法设置 
+# ==========================================
+# 是否使用 PNN 算法
+# PNN 计算量小，内存占用低，适合树莓派
+USE_PNN = True  
+# 是否使用 YOLO 算法
+# YOLO 精度高但资源消耗大，在 1GB 内存的 Pi 上默认禁用
+USE_YOLO = False  
+
+# ==========================================
+# 路径配置 
+# ==========================================
+# 项目根目录绝对路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# PNN 模型文件路径
 MODEL_PATH = os.path.join(BASE_DIR, "model_pnn.pkl")
+# 输出目录 (用于保存检测到的火灾图片)
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+# 日志目录
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 
-# Ensure directories exist
+# 确保必要的目录存在
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)

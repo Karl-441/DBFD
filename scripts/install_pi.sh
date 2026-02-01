@@ -16,8 +16,9 @@ echo "Installing system libraries..."
 # Added python3-mss if available, otherwise pip will handle it
 # Note: Replaced libatlas-base-dev with libopenblas-dev for newer Debian versions (Trixie+)
 # Added python3-libcamera (Picamera2) for official RPi cameras on Bullseye/Bookworm
-# Removed python3-rpi.gpio as fan control was removed
-sudo apt-get install -y python3-opencv python3-numpy python3-scipy python3-pyqt6 python3-skimage python3-pip python3-venv libopenblas-dev python3-libcamera
+# Added python3-rpi.gpio for alarm module
+# Added python3-gpiozero for Raspberry Pi 5 compatibility
+sudo apt-get install -y python3-opencv python3-numpy python3-scipy python3-pyqt6 python3-skimage python3-pip python3-venv libopenblas-dev python3-libcamera python3-rpi.gpio python3-gpiozero
 
 # 3. Create Virtual Environment (Portable-ish for same architecture)
 echo "Creating Virtual Environment in 'venv'..."
@@ -34,6 +35,22 @@ pip install mss psutil ultralytics --break-system-packages
 
 echo "Permissions..."
 chmod +x start_service.sh
+chmod +x fix_alarm_boot.sh
+
+echo "Applying GPIO Boot Fix (Prevent Alarm Trigger)..."
+./fix_alarm_boot.sh || echo "Warning: Failed to run boot fix script. Please run manually."
+
+echo "Configuring Kernel UDP Buffers (sysctl) for smooth streaming..."
+# Increase UDP buffers for reliable streaming (as per rpicam/mediamtx recommendation)
+SYSCTL_CONF="/etc/sysctl.conf"
+if ! grep -q "net.core.rmem_default=1000000" "$SYSCTL_CONF"; then
+    echo "net.core.rmem_default=1000000" | sudo tee -a "$SYSCTL_CONF"
+    echo "net.core.rmem_max=1000000" | sudo tee -a "$SYSCTL_CONF"
+    sudo sysctl -p
+    echo "Sysctl updated."
+else
+    echo "Sysctl already configured."
+fi
 
 echo "Installation Complete!"
 echo "--------------------------------------------------------"

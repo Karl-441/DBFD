@@ -6,3 +6,4 @@ mss
 opencv-python
 PyQt6
 ultralytics
+RPi.GPIO
