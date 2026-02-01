@@ -3,13 +3,7 @@ import cv2
 import numpy as np
 import time
 import os
-import gc
-import config
-try:
-    import mss
-except ImportError:
-    mss = None
-    print("Warning: 'mss' library not found. Screen capture disabled.")
+import mss
 import glob
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QImage, QPixmap, QAction, QIcon
@@ -20,8 +14,8 @@ from PyQt6.QtWidgets import (
     QTabWidget
 )
 
-# 导入算法模块
-# 将父目录添加到路径
+# Import algorithms
+# Add parent dir to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from algorithm.preprocess import preprocess_image
@@ -29,100 +23,46 @@ from algorithm.features import extract_features
 from algorithm.pnn import PNN
 from algorithm.fusion import FusionDetector
 from core.output_manager import OutputManager
-from core.alarm_manager import AlarmManager
 from ui.data_manager_ui import DataManagerUI
 import pickle
-
-try:
-    from ultralytics import YOLO
-except ImportError:
-    YOLO = None
-    print("Warning: Ultralytics not installed. YOLO disabled.")
-
-"""
-主界面模块
-    提供基于 PyQt6 的图形用户界面，集成视频流显示、算法控制、报警状态反馈等功能。
-    包含两个主要类：
-    1. AlgorithmWorker: 后台线程，负责视频流读取、处理和算法推理，避免阻塞 UI。
-    2. MainWindow: 主窗口，负责 UI 布局和交互逻辑。
-"""
+from ultralytics import YOLO
 
 class AlgorithmWorker(QThread):
-    """
-    算法工作线程
-        在后台执行耗时的图像处理和模型推理任务。
-        通过信号将处理结果（图像、FPS、检测状态）发送回主线程进行显示。
-    """
-    # 信号定义: 图像数据(ndarray), FPS(float), 是否发现火灾(bool)
-    result_signal = pyqtSignal(object, object, bool) 
+    result_signal = pyqtSignal(object, object, bool) # image, fps, has_fire
     
     def __init__(self, source_type, source_path, algorithm_type, pnn_model, yolo_model):
         super().__init__()
-        self.source_type = source_type # 来源类型: 'image', 'video', 'camera', 'screen'
+        self.source_type = source_type # 'image', 'video', 'camera', 'screen'
         self.source_path = source_path
-        self.algorithm_type = algorithm_type # 算法类型: 'PNN', 'YOLO', 'FUSION'
+        self.algorithm_type = algorithm_type # 'PNN', 'YOLO', 'FUSION'
         self.pnn_model = pnn_model
         self.yolo_model = yolo_model
         self.fusion_detector = FusionDetector(pnn_model, yolo_model)
         self.output_manager = OutputManager()
-        self.alarm_manager = AlarmManager()
         self.running = True
         self.paused = False
         self.frame_count = 0
         
-        # 缓存上一帧的检测结果，用于跳帧时的绘制
-        self.last_detections = [] 
-        self.last_has_fire = False
-        self.last_detect_time = 0
-        
     def run(self):
-        """线程主入口"""
         cap = None
         sct = None
         
-        # 1. 初始化输入源
-        if self.source_type == 'video':
+        if self.source_type == 'video' or self.source_type == 'camera':
             cap = cv2.VideoCapture(self.source_path)
-        elif self.source_type == 'camera':
-             if config.USE_LIBCAMERA:
-                 try:
-                     from core.camera_wrapper import LibCameraWrapper
-                     cap = LibCameraWrapper(config.FRAME_WIDTH, config.FRAME_HEIGHT, config.FPS)
-                     print("GUI: Using LibCameraWrapper")
-                 except ImportError as e:
-                     print(f"GUI: Failed to load LibCameraWrapper: {e}")
-                     cap = cv2.VideoCapture(self.source_path)
-             else:
-                cap = cv2.VideoCapture(self.source_path)
-                
         elif self.source_type == 'screen':
-            if mss is None:
-                print("Error: Screen capture requires 'mss' library.")
-                self.running = False
-                return
-            if not os.environ.get('DISPLAY') and sys.platform != 'win32':
-                print("Error: Screen capture requires X11 DISPLAY. Disabling screen capture.")
-                self.running = False
-                return
-            try:
-                sct = mss.mss()
-                monitor = sct.monitors[1] # 主显示器
-            except Exception as e:
-                print(f"Screen capture init error: {e}")
-                self.running = False
-                return
+            sct = mss.mss()
+            monitor = sct.monitors[1] # Primary monitor
             
         elif self.source_type == 'image':
             img = cv2.imread(self.source_path)
             if img is not None:
                 vis, has_fire = self.process_frame(img)
-                # 自动保存处理结果
+                # Auto-save processed image as requested
                 self.output_manager.save_prediction(vis, [], metadata={"source": self.source_path, "has_fire": has_fire})
                 self.result_signal.emit(vis, 0.0, has_fire)
             self.running = False
             return
 
-        # 2. 主循环
         while self.running:
             if self.paused:
                 time.sleep(0.1)
@@ -131,154 +71,91 @@ class AlgorithmWorker(QThread):
             start_time = time.time()
             frame = None
             
-            # 读取帧
             if self.source_type in ['video', 'camera']:
                 ret, frame = cap.read()
                 if not ret:
                     if self.source_type == 'video':
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 视频循环播放
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # Loop
                         continue
                     else:
-                        # 对于摄像头，持续尝试读取 (LibCameraWrapper 会自动重启)
-                        time.sleep(0.05)
-                        continue
+                        break
             elif self.source_type == 'screen':
-                try:
-                    sct_img = sct.grab(monitor)
-                except Exception as e:
-                    print(f"Screen capture error: {e}")
-                    time.sleep(0.5)
-                    continue
+                sct_img = sct.grab(monitor)
                 frame = np.array(sct_img)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-                # 调整大小以提高性能
+                # Resize for performance if needed
                 frame = cv2.resize(frame, (1280, 720))
                 
             if frame is not None:
-                # 处理帧
-                # 性能优化: 仅每隔 DETECT_INTERVAL 帧执行一次实际检测
-                do_detect = (self.frame_count % config.DETECT_INTERVAL == 0)
-                res_frame, has_fire = self.process_frame(frame, do_detect)
-                
+                res_frame, has_fire = self.process_frame(frame)
                 fps = 1.0 / (time.time() - start_time)
                 self.result_signal.emit(res_frame, fps, has_fire)
                 
-                # 立即清理
-                del frame
-                
-                # 记录指标
+                # Log metrics every 100 frames
                 self.frame_count += 1
                 if self.frame_count % 100 == 0:
                     self.output_manager.log_metric("fps", fps)
-                
-                # 强制 GC
-                if self.frame_count % config.GC_INTERVAL == 0:
-                    gc.collect() 
             else:
                 time.sleep(0.01)
-
-        # 清理资源
-        if sct:
-            try:
-                sct.close()
-            except:
-                pass
+                
         if cap:
             cap.release()
 
-    def process_frame(self, frame, do_detect=True):
-        """
-        处理单帧图像：检测与绘制
-        
-        参数:
-            frame: 原始图像
-            do_detect: 是否执行新的检测。如果为 False，则复用上一帧的检测结果进行绘制。
-        """
+    def process_frame(self, frame):
+        detections = []
         vis = frame.copy()
+        has_fire = False
         
-        # 1. 执行检测 (仅当 do_detect 为 True 时)
-        if do_detect:
-            self.last_detections = []
-            self.last_has_fire = False
-            
-            try:
-                if self.algorithm_type == 'PNN':
-                    # PNN 返回格式: [(x, y, w, h), ...]
-                    dets, _ = self.detect_pnn(frame)
-                    if dets: 
-                        self.last_has_fire = True
-                        # 统一格式化为 (x, y, w, h, label, color)
-                        for (x, y, w, h) in dets:
-                            self.last_detections.append((x, y, w, h, "FIRE (PNN)", (0, 0, 255)))
-                        
-                elif self.algorithm_type == 'YOLO':
-                    # YOLO 返回格式: [(x, y, w, h), ...]
-                    dets = self.detect_yolo(frame)
-                    if dets: 
-                        self.last_has_fire = True
-                        for (x, y, w, h) in dets:
-                            self.last_detections.append((x, y, w, h, "FIRE (YOLO)", (255, 0, 0)))
+        if self.algorithm_type == 'PNN':
+            dets, _ = self.detect_pnn(frame)
+            if dets: has_fire = True
+            for (x, y, w, h) in dets:
+                cv2.rectangle(vis, (x, y), (x+w, y+h), (0, 0, 255), 2)
+                cv2.putText(vis, "FIRE (PNN)", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 
-                elif self.algorithm_type == 'FUSION':
-                    # Fusion 返回格式: [(x, y, w, h, conf, src), ...]
-                    results = self.fusion_detector.detect(frame)
-                    if results: 
-                        self.last_has_fire = True
-                        for (x, y, w, h, conf, src) in results:
-                            color = (0, 255, 0)
-                            if "PNN" in src and "YOLO" not in src: color = (0, 0, 255)
-                            if "YOLO" in src and "PNN" not in src: color = (255, 0, 0)
-                            label = f"{src} {conf:.2f}"
-                            self.last_detections.append((x, y, w, h, label, color))
-            except Exception as e:
-                print(f"Detection Error: {e}")
-
-        # 2. 绘制结果 (始终执行，使用 self.last_detections)
-        for (x, y, w, h, label, color) in self.last_detections:
-            cv2.rectangle(vis, (x, y), (x+w, y+h), color, 2)
-            cv2.putText(vis, label, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        elif self.algorithm_type == 'YOLO':
+            dets = self.detect_yolo(frame)
+            if dets: has_fire = True
+            for (x, y, w, h) in dets:
+                cv2.rectangle(vis, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                cv2.putText(vis, "FIRE (YOLO)", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         
-        # 3. 触发报警
-        if self.last_has_fire:
-            self.alarm_manager.trigger()
-            
-        return vis, self.last_has_fire
+        elif self.algorithm_type == 'FUSION':
+            results = self.fusion_detector.detect(frame)
+            if results: has_fire = True
+            for (x, y, w, h, conf, src) in results:
+                color = (0, 255, 0) # Green for fused
+                if "PNN" in src and "YOLO" not in src: color = (0, 0, 255)
+                if "YOLO" in src and "PNN" not in src: color = (255, 0, 0)
+                
+                cv2.rectangle(vis, (x, y), (x+w, y+h), color, 2)
+                label = f"{src} {conf:.2f}"
+                cv2.putText(vis, label, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        
+        return vis, has_fire
 
     def detect_pnn(self, img):
-        """PNN 检测流程"""
         try:
-            target_w, target_h = config.PNN_TARGET_WIDTH, config.PNN_TARGET_HEIGHT
-            h0, w0 = img.shape[:2]
-            small = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
-            mask = preprocess_image(small)
+            mask = preprocess_image(img)
             num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
-            sx = w0 / float(target_w)
-            sy = h0 / float(target_h)
             detections = []
             for i in range(1, num_labels):
                 x, y, w, h, area = stats[i]
-                if area < 12: 
-                    continue
+                if area < 20: continue
                 component_mask = np.zeros_like(mask)
                 component_mask[labels == i] = 255
-                roi = small[y:y+h, x:x+w]
+                roi = img[y:y+h, x:x+w]
                 roi_mask = component_mask[y:y+h, x:x+w]
                 try:
                     feats = extract_features(roi, roi_mask)
                     pred = self.pnn_model.predict(feats)[0]
                     if pred == 1:
-                        xr = int(x * sx)
-                        yr = int(y * sy)
-                        wr = int(w * sx)
-                        hr = int(h * sy)
-                        detections.append((xr, yr, wr, hr))
-                except: 
-                    continue
+                        detections.append((x, y, w, h))
+                except: continue
             return detections, mask
         except: return [], None
 
     def detect_yolo(self, img):
-        """YOLO 检测流程"""
         if self.yolo_model is None: return []
         try:
             results = self.yolo_model(img, verbose=False)
@@ -292,26 +169,21 @@ class AlgorithmWorker(QThread):
         except: return []
 
     def stop(self):
-        """停止线程"""
         self.running = False
         self.wait()
-        self.alarm_manager.cleanup()
 
 class MainWindow(QMainWindow):
-    """
-    主窗口类
-    """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DBFD System - Drone Based Fire Detector (无人机火灾检测系统)")
+        self.setWindowTitle("DBFD System - Drone Based Fire Detector")
         self.setGeometry(100, 100, 1280, 800)
         
         self.output_manager = OutputManager()
-        # 模型加载
+        # self.load_models() # Now called when needed or on init with default
         self.pnn_model = None
         self.yolo_model = None
         self.load_pnn_model()
-        self.load_yolo_model("yolov8n.pt") # 默认加载
+        self.load_yolo_model("yolov8n.pt") # Default
         
         self.init_ui()
         
@@ -321,18 +193,17 @@ class MainWindow(QMainWindow):
         self.video_writer = None
         
     def load_pnn_model(self, path=None):
-        """加载 PNN 模型"""
         try:
             if not path:
-                # 尝试加载最新的 pnn_latest.pkl，如果不存在则加载 model_pnn.pkl
+                # Try pnn_latest.pkl first, then model_pnn.pkl
                 base_dir = os.path.dirname(os.path.dirname(__file__))
-                # 先检查 models 目录
+                # Check models dir first
                 path = os.path.join(base_dir, "models", "pnn_latest.pkl")
                 if not os.path.exists(path):
-                     # 回退到旧路径
+                     # Fallback to legacy path
                      path = os.path.join(base_dir, "model_pnn.pkl")
             
-            # 处理从下拉框传入的纯文件名
+            # Handle just filename passed from combo box
             if not os.path.exists(path):
                 alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", path)
                 if os.path.exists(alt_path):
@@ -352,13 +223,8 @@ class MainWindow(QMainWindow):
             return False
 
     def load_yolo_model(self, path):
-        """加载 YOLO 模型"""
-        if YOLO is None:
-            self.yolo_model = None
-            return False
-            
         try:
-            # 检查路径
+            # Check if path is just a name, look in models/
             if not os.path.exists(path):
                 alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", path)
                 if os.path.exists(alt_path):
@@ -373,17 +239,16 @@ class MainWindow(QMainWindow):
             return False
 
     def init_ui(self):
-        """初始化 UI 布局"""
-        # 标签页容器
+        # Tabs
         tabs = QTabWidget()
         self.setCentralWidget(tabs)
         
-        # 标签页 1: 实时检测
+        # Tab 1: Detection
         detection_widget = QWidget()
         self.setup_detection_ui(detection_widget)
-        tabs.addTab(detection_widget, "Real-time Detection (实时检测)")
+        tabs.addTab(detection_widget, "Real-time Detection")
         
-        # 标签页 2: 数据管理 (预留)
+        # Tab 2: Data Manager
         # data_widget = DataManagerUI()
         # tabs.addTab(data_widget, "Data Management")
         pass
@@ -391,26 +256,22 @@ class MainWindow(QMainWindow):
     def setup_detection_ui(self, widget):
         main_layout = QHBoxLayout(widget)
         
-        # --- 左侧面板: 控制区 ---
+        # --- Left Panel: Controls ---
         left_panel = QFrame()
         left_panel.setFrameShape(QFrame.Shape.StyledPanel)
         left_panel.setFixedWidth(300)
         left_layout = QVBoxLayout(left_panel)
         
-        # 1. 输入源选择 (Media Input)
-        gb_input = QGroupBox("Media Input (输入源)")
+        # 1. Media Input
+        gb_input = QGroupBox("Media Input")
         input_layout = QVBoxLayout()
-        self.btn_upload = QPushButton("Upload Image (上传图片)")
+        self.btn_upload = QPushButton("Upload Image")
         self.btn_upload.clicked.connect(self.upload_image)
-        self.btn_camera = QPushButton("Open Camera (打开摄像头)")
+        self.btn_camera = QPushButton("Open Camera")
         self.btn_camera.clicked.connect(self.start_camera)
-        self.btn_screen = QPushButton("Screen Capture (屏幕捕获)")
+        self.btn_screen = QPushButton("Screen Capture")
         self.btn_screen.clicked.connect(self.start_screen)
-        if mss is None:
-            self.btn_screen.setEnabled(False)
-            self.btn_screen.setToolTip("Install 'mss' to enable screen capture")
-        
-        self.btn_video_file = QPushButton("Open Video File (打开视频)")
+        self.btn_video_file = QPushButton("Open Video File")
         self.btn_video_file.clicked.connect(self.upload_video)
         input_layout.addWidget(self.btn_upload)
         input_layout.addWidget(self.btn_video_file)
@@ -418,33 +279,33 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(self.btn_screen)
         gb_input.setLayout(input_layout)
         
-        # 2. 算法控制 (Algorithm Control)
-        gb_algo = QGroupBox("Algorithm Control (算法控制)")
+        # 2. Algorithm Control
+        gb_algo = QGroupBox("Algorithm Control")
         algo_layout = QVBoxLayout()
-        algo_layout.addWidget(QLabel("Select Algorithm (选择算法):"))
+        algo_layout.addWidget(QLabel("Select Algorithm:"))
         self.combo_algo = QComboBox()
         self.combo_algo.addItems(["PNN (Color+Texture)", "YOLO (Deep Learning)", "FUSION (Best Accuracy)"])
         self.combo_algo.currentIndexChanged.connect(self.change_algorithm)
         algo_layout.addWidget(self.combo_algo)
         
-        # PNN 模型选择器
+        # PNN Model Selector
         algo_layout.addWidget(QLabel("PNN Model:"))
         self.combo_pnn = QComboBox()
         self.refresh_pnn_list()
         self.combo_pnn.currentIndexChanged.connect(self.change_pnn_model)
         algo_layout.addWidget(self.combo_pnn)
 
-        # YOLO 模型选择器
+        # YOLO Model Selector
         algo_layout.addWidget(QLabel("YOLO Model:"))
         self.combo_yolo = QComboBox()
         self.refresh_yolo_list()
         self.combo_yolo.currentIndexChanged.connect(self.change_yolo_model)
         algo_layout.addWidget(self.combo_yolo)
         
-        self.btn_start = QPushButton("Start Processing (开始)")
+        self.btn_start = QPushButton("Start Processing")
         self.btn_start.clicked.connect(self.start_processing)
         self.btn_start.setEnabled(False)
-        self.btn_stop = QPushButton("Stop (停止)")
+        self.btn_stop = QPushButton("Stop")
         self.btn_stop.clicked.connect(self.stop_processing)
         self.btn_stop.setEnabled(False)
         algo_layout.addWidget(self.btn_start)
@@ -453,13 +314,13 @@ class MainWindow(QMainWindow):
         algo_layout.addWidget(self.lbl_status)
         gb_algo.setLayout(algo_layout)
         
-        # 3. 输出控制 (Export)
-        gb_export = QGroupBox("Output (输出)")
+        # 3. Export
+        gb_export = QGroupBox("Output")
         export_layout = QVBoxLayout()
-        self.btn_save_img = QPushButton("Save Current Frame (保存当前帧)")
+        self.btn_save_img = QPushButton("Save Current Frame")
         self.btn_save_img.clicked.connect(self.save_image)
         self.btn_save_img.setEnabled(False)
-        self.btn_record = QPushButton("Start Recording (开始录制)")
+        self.btn_record = QPushButton("Start Recording")
         self.btn_record.clicked.connect(self.toggle_recording)
         self.btn_record.setEnabled(False)
         export_layout.addWidget(self.btn_save_img)
@@ -471,7 +332,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(gb_export)
         left_layout.addStretch()
         
-        # --- 中间面板: 可视化 ---
+        # --- Center Panel: Visualization ---
         center_panel = QFrame()
         center_layout = QVBoxLayout(center_panel)
         self.display_label = QLabel("No Media")
@@ -485,17 +346,16 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(left_panel)
         main_layout.addWidget(center_panel)
         
-        # 状态
+        # State
         self.source_type = None
         self.source_path = None
 
     def refresh_yolo_list(self):
-        """刷新 YOLO 模型列表"""
         self.combo_yolo.clear()
-        # 添加默认
+        # Add default
         self.combo_yolo.addItem("yolov8n.pt")
         
-        # 扫描 models/ 目录
+        # Scan models/ dir
         models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
         if os.path.exists(models_dir):
             files = glob.glob(os.path.join(models_dir, "*.pt"))
@@ -503,9 +363,8 @@ class MainWindow(QMainWindow):
                 self.combo_yolo.addItem(os.path.basename(f))
 
     def refresh_pnn_list(self):
-        """刷新 PNN 模型列表"""
         self.combo_pnn.clear()
-        # 遗留/默认
+        # Legacy/Default
         self.combo_pnn.addItem("pnn_latest.pkl")
         self.combo_pnn.addItem("model_pnn.pkl")
         
@@ -521,7 +380,7 @@ class MainWindow(QMainWindow):
         model_name = self.combo_yolo.currentText()
         if self.load_yolo_model(model_name):
             self.lbl_status.setText(f"Loaded: {model_name}")
-            # 如果正在运行，重启
+            # If running, restart
             if self.worker and self.worker.isRunning():
                 self.stop_processing()
                 self.start_processing()
@@ -530,7 +389,7 @@ class MainWindow(QMainWindow):
         model_name = self.combo_pnn.currentText()
         if self.load_pnn_model(model_name):
             self.lbl_status.setText(f"Loaded PNN: {model_name}")
-            # 如果正在运行，重启
+            # If running, restart
             if self.worker and self.worker.isRunning():
                 self.stop_processing()
                 self.start_processing()
@@ -544,7 +403,7 @@ class MainWindow(QMainWindow):
             self.show_preview(path)
             self.btn_start.setEnabled(True)
             self.lbl_status.setText("Status: Image Loaded")
-            # 自动开始处理以获得即时反馈
+            # Auto-start processing for immediate feedback
             self.start_processing()
             
     def upload_video(self):
@@ -612,46 +471,27 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("color: gray; font-weight: bold;")
         
     def update_display(self, frame, fps, has_fire):
-        """更新 UI 显示"""
-        # 优化: 不要强引用当前帧，或者确保正确替换
-        self.current_image = frame 
+        self.current_image = frame
         self.lbl_fps.setText(f"FPS: {fps:.2f}")
         
-        # 火灾警告叠加层
+        # Fire Alert Overlay
         if has_fire:
-            # 绘制半透明红色框
+            # Draw semi-transparent red box
             overlay = frame.copy()
             cv2.rectangle(overlay, (0, 0), (300, 50), (0, 0, 255), -1)
             cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-            del overlay
             
-            # 绘制文字
+            # Draw text
             cv2.putText(frame, "WARNING: FIRE DETECTED!", (10, 35), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
-        # 将 BGR 转为 RGB 用于 Qt 显示
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        
-        # 创建 QImage
-        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-        
-        # 缩放并显示 (使用 FastTransformation 保证性能)
-        pixmap = QPixmap.fromImage(qt_image).scaled(
-            self.display_label.size(), 
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation
-        )
-        self.display_label.setPixmap(pixmap)
+        qt_image = QImage(rgb_image.data, w, h, ch * w, QImage.Format.Format_RGB888)
+        self.display_label.setPixmap(QPixmap.fromImage(qt_image).scaled(self.display_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
         
         if self.recording and self.video_writer:
             self.video_writer.write(frame)
-        
-        # 清理局部变量
-        del rgb_image
-        del qt_image
-        del pixmap
 
     def save_image(self):
         if self.current_image is not None:
@@ -687,4 +527,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
-
