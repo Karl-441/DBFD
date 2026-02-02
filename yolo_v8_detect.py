@@ -32,10 +32,11 @@ def main():
     
     # 检查常见的训练权重路径
     # 优先使用本地训练好的最佳权重，如果找不到则使用预训练模型或传入的参数
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     possible_paths = [
-        r'runs/detect/train/weights/best.pt',
-        r'd:/Github/DBFD/runs/detect/train/weights/best.pt',
-        r'd:/Github/DBFD/output/models/yolo_auto_train/exp/weights/best.pt'
+        os.path.join(base_dir, 'runs', 'detect', 'train', 'weights', 'best.pt'),
+        os.path.join(base_dir, 'models', 'best.pt'),
+        os.path.join(base_dir, 'models', 'yolov8n.pt')
     ]
     
     for p in possible_paths:
@@ -46,9 +47,23 @@ def main():
     parser.add_argument('--model', type=str, default=default_model, help="Path to model .pt file / 模型路径")
     args = parser.parse_args()
 
-    print(f"Loading model {args.model}... (正在加载模型)")
+    # 处理模型路径，如果只是文件名，尝试在 models 目录查找
+    model_path = args.model
+    if not os.path.exists(model_path) and not os.path.isabs(model_path):
+         alt_path = os.path.join(base_dir, 'models', model_path)
+         if os.path.exists(alt_path):
+             model_path = alt_path
+
+    print(f"Loading model {model_path}... (正在加载模型)")
+    
+    # STRICT CHECK: Do not allow auto-download
+    if not os.path.exists(model_path):
+        print(f"Error: Model file not found: {model_path}")
+        print("Please place your YOLO model (.pt) in the 'models/' directory.")
+        return
+
     try:
-        model = YOLO(args.model)
+        model = YOLO(model_path)
     except Exception as e:
         print(f"Error loading model: {e}")
         return

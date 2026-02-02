@@ -2,17 +2,17 @@ import subprocess
 import numpy as np
 import cv2
 import time
-import os
 import signal
 import shutil
 import tempfile
+from pathlib import Path
 
 """
     针对树莓派的新版摄像头栈 (libcamera / rpicam-apps) 进行封装。
     由于 OpenCV 的 V4L2 后端在某些 Pi 系统上兼容性不佳，本模块通过
     调用 `rpicam-vid` 或 `libcamera-vid` 命令行工具，将视频流推送到
     本地 UDP 端口，然后使用 OpenCV 读取该 UDP 流。
-    这种方法能获得更好的性能（硬件编码）和兼容性（Pi 4/5）。
+    这种方法能获得更好的性能和兼容性。
 """
 
 class LibCameraWrapper:
@@ -29,7 +29,7 @@ class LibCameraWrapper:
         self.cap = None
         self.fail_count = 0
         self.max_fail = max(10, int(fps)) # 允许的最大连续读取失败次数
-        self.log_file = os.path.join(tempfile.gettempdir(), "rpicam_stderr.log")
+        self.log_file = Path(tempfile.gettempdir()) / "rpicam_stderr.log"
         
         # 确定使用的命令: 优先尝试 rpicam-vid (Bookworm), 然后是 libcamera-vid (Bullseye)
         self.cmd_base = None
@@ -56,8 +56,9 @@ class LibCameraWrapper:
     def _check_pi5(self):
         """检查是否运行在 Raspberry Pi 5 上"""
         try:
-            if os.path.exists('/proc/device-tree/model'):
-                with open('/proc/device-tree/model', 'r') as f:
+            model_file = Path('/proc/device-tree/model')
+            if model_file.exists():
+                with model_file.open('r') as f:
                     model = f.read()
                     return "Raspberry Pi 5" in model
         except:
@@ -79,7 +80,7 @@ class LibCameraWrapper:
         ]
         
         # Pi 5 优化: 强制使用 baseline profile 以避免 B-frames (减少延迟)
-        # 注意: 目前禁用，因可能与某些 Trixie libav 版本冲突
+        # 目前禁用，因可能与某些 Trixie libav 版本冲突
         # if self.is_pi5:
         #    cmd.extend(["--libav-video-codec-opts", "profile=baseline"])
             
@@ -121,7 +122,8 @@ class LibCameraWrapper:
             # 配置 OpenCV 读取 UDP 流
             # 使用 udp://@:1234 绑定所有接口
             # 设置 overrun_nonfatal=1 防止缓冲区溢出导致崩溃
-            udp_url = f"udp://@:{self.udp_port}?overrun_nonfatal=1&fifo_size=5000000"
+            # 增加 fifo_size 和 buffer_size 以应对网络波动
+            udp_url = f"udp://@:{self.udp_port}?overrun_nonfatal=1&fifo_size=50000000&buffer_size=10000000"
             self.cap = cv2.VideoCapture(udp_url, cv2.CAP_FFMPEG)
             
             if not self.cap.isOpened():

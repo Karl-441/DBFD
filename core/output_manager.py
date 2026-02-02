@@ -1,9 +1,10 @@
 import os
-import datetime
 import shutil
 import json
 import cv2
 import numpy as np
+from pathlib import Path
+from datetime import datetime
 
 """
 输出管理器
@@ -12,7 +13,6 @@ import numpy as np
     2. 模型文件归档 (Models)
     3. 运行日志 (Logs)
     4. 结果元数据 (Metadata JSON)
-    
     提供自动化的目录结构创建、文件清理和格式化存储功能。
 """
 
@@ -25,9 +25,9 @@ class OutputManager:
         """
         if base_dir is None:
             # 默认为 d:\Github\DBFD\output
-            self.base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
+            self.base_dir = Path(__file__).resolve().parent.parent / "output"
         else:
-            self.base_dir = base_dir
+            self.base_dir = Path(base_dir)
             
         self.ensure_structure()
         
@@ -41,17 +41,17 @@ class OutputManager:
         """
         subdirs = ["models", "predictions", "logs", "visualizations"]
         for sd in subdirs:
-            os.makedirs(os.path.join(self.base_dir, sd), exist_ok=True)
+            (self.base_dir / sd).mkdir(parents=True, exist_ok=True)
             
     def get_run_dir(self):
         """
             为每次实验或运行创建一个带有时间戳的独立目录。
         返回值:
-            str: 新创建的运行目录路径
+            Path: 新创建的运行目录路径
         """
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join(self.base_dir, "predictions", f"run_{timestamp}")
-        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = self.base_dir / "predictions" / f"run_{timestamp}"
+        run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
 
     def save_model(self, model_path, model_name=None):
@@ -61,16 +61,17 @@ class OutputManager:
             model_path: 源模型文件路径
             model_name: 目标文件名 (可选)
         返回值:
-            str: 归档后的文件路径
+            Path: 归档后的文件路径
         """
+        model_path = Path(model_path)
         if model_name is None:
-            model_name = os.path.basename(model_path)
+            model_name = model_path.name
             
-        timestamp = datetime.datetime.now().strftime("%Y%m%d")
-        dest_dir = os.path.join(self.base_dir, "models", timestamp)
-        os.makedirs(dest_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d")
+        dest_dir = self.base_dir / "models" / timestamp
+        dest_dir.mkdir(parents=True, exist_ok=True)
         
-        dest_path = os.path.join(dest_dir, model_name)
+        dest_path = dest_dir / model_name
         shutil.copy2(model_path, dest_path)
         return dest_path
 
@@ -83,96 +84,33 @@ class OutputManager:
             metadata: 额外的元数据字典 (可选)
             filename: 文件名 (可选)
         返回值:
-            str: 图片保存路径
+            Path: 图片保存路径
         """
         if filename is None:
-            filename = f"pred_{datetime.datetime.now().strftime('%H%M%S_%f')}.jpg"
+            filename = f"pred_{datetime.now().strftime('%H%M%S_%f')}.jpg"
             
         # 确定保存位置 (按日期分类)
-        today = datetime.datetime.now().strftime("%Y%m%d")
-        save_dir = os.path.join(self.base_dir, "predictions", today)
-        os.makedirs(save_dir, exist_ok=True)
+        today = datetime.now().strftime("%Y%m%d")
+        save_dir = self.base_dir / "predictions" / today
+        save_dir.mkdir(parents=True, exist_ok=True)
         
         # 保存图片
-        img_path = os.path.join(save_dir, filename)
-        cv2.imwrite(img_path, image)
+        img_path = save_dir / filename
+        # cv2.imwrite 在某些系统上不支持 Path 对象，需转为字符串
+        cv2.imwrite(str(img_path), image)
         
         # 保存元数据 (JSON)
         if metadata or detections:
-            json_path = img_path.replace(os.path.splitext(filename)[1], ".json")
+            json_path = img_path.with_suffix('.json')
             
-            # 辅助函数: 将 numpy 类型转换为 Python 原生类型以便 JSON 序列化
-            def convert_numpy(obj):
-                if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-                                    np.int16, np.int32, np.int64, np.uint8,
-                                    np.uint16, np.uint32, np.uint64)):
-                    return int(obj)
-                elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
-                    return float(obj)
-                elif isinstance(obj, (np.ndarray,)):
-                    return obj.tolist()
-                return obj
-
-            # 递归转换 detections
-            serializable_detections = []
-            for d in detections:
-                if isinstance(d, (list, tuple)):
-                    serializable_detections.append([convert_numpy(x) for x in d])
-                else:
-                    serializable_detections.append(convert_numpy(d))
-
             data = {
-                "timestamp": datetime.datetime.now().isoformat(),
-                "detections": serializable_detections,
+                "timestamp": datetime.now().isoformat(),
+                "filename": filename,
+                "detections": detections, # 假设 detections 已经是可序列化格式
                 "metadata": metadata or {}
             }
-            with open(json_path, 'w') as f:
+            
+            with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)
                 
         return img_path
-
-    def log_metric(self, metric_name, value):
-        """
-        记录性能指标
-        参数:
-            metric_name: 指标名称
-            value: 指标值
-        """
-        today = datetime.datetime.now().strftime("%Y%m%d")
-        log_file = os.path.join(self.base_dir, "logs", f"metrics_{today}.csv")
-        
-        is_new = not os.path.exists(log_file)
-        with open(log_file, 'a') as f:
-            if is_new:
-                f.write("timestamp,metric,value\n")
-            f.write(f"{datetime.datetime.now().isoformat()},{metric_name},{value}\n")
-
-    def clean_old_files(self, days_to_keep=30):
-        """
-        删除超过指定天数的旧文件，防止磁盘占满。
-        参数:
-            days_to_keep: 保留天数
-        """
-        cutoff = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
-        
-        for root, dirs, files in os.walk(self.base_dir):
-            for name in files:
-                path = os.path.join(root, name)
-                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(path))
-                if mtime < cutoff:
-                    try:
-                        os.remove(path)
-                    except Exception as e:
-                        print(f"Error removing {path}: {e}")
-
-    def validate_output(self):
-        """验证输出目录是否可写"""
-        try:
-            test_file = os.path.join(self.base_dir, "logs", ".test")
-            with open(test_file, 'w') as f:
-                f.write("test")
-            os.remove(test_file)
-            return True
-        except Exception as e:
-            print(f"Output validation failed: {e}")
-            return False

@@ -50,12 +50,13 @@ def run_headless(camera_index=0):
     
     # 1. 加载模型 (Load Model)
     pnn_model = None
-    if os.path.exists(config.MODEL_PATH):
-        with open(config.MODEL_PATH, 'rb') as f:
+    model_path = Path(config.MODEL_PATH)
+    if model_path.exists():
+        with model_path.open('rb') as f:
             pnn_model = pickle.load(f)
         print("PNN Model loaded. (模型已加载)")
     else:
-        print(f"Error: Model not found at {config.MODEL_PATH} (未找到模型文件)")
+        print(f"Error: Model not found at {model_path} (未找到模型文件)")
         return
 
     # 2. 初始化摄像头 (Setup Camera)
@@ -80,8 +81,6 @@ def run_headless(camera_index=0):
     
     last_save_time = 0
     save_interval = 2.0 # 报警图片保存间隔 (秒)，防止磁盘IO过高
-    
-    # 优化: 预分配变量 (虽然 Python 是动态类型，但保持良好的变量管理习惯有助于内存)
     frame_count = 0
     fps_start_time = time.time()
 

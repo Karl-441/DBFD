@@ -18,7 +18,7 @@ from core.memory_monitor import MemoryMonitor
 
 def main():
     """
-    主函数 (Main Function)
+    主函数
         1. 解析命令行参数 (--headless, --camera)
         2. 初始化并启动内存监控器
         3. 根据模式启动应用 (GUI 或 Headless)
@@ -41,14 +41,14 @@ def main():
     print(f"Mode: {'Headless (无头模式)' if args.headless else 'GUI (图形界面模式)'}")
     print(f"Memory Limit: {config.MAX_MEMORY_MB} MB (内存限制)")
 
-    # 启动内存监控器 (Start Memory Monitor)
+    # 启动内存监控器
     # 用于在内存不足时自动执行垃圾回收或警告
     monitor = MemoryMonitor(threshold_mb=config.MAX_MEMORY_MB)
     monitor.start()
 
     try:
         if args.headless:
-            # 无头模式 (Headless Mode)
+            # 无头模式
             try:
                 from core.headless_runner import run_headless
                 run_headless(args.camera)
@@ -60,9 +60,9 @@ def main():
                 print("Or: pip install opencv-python-headless\n")
                 sys.exit(1)
         else:
-            # GUI 模式 (GUI Mode)
+            # GUI 模式
             try:
-                # 延迟导入 PyQt6，节省内存 (如果不需要 GUI 就不加载)
+                # 延迟导入 PyQt6，节省内存
                 from PyQt6.QtWidgets import QApplication
                 from ui.gui import MainWindow
                 

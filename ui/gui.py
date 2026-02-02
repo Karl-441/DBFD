@@ -31,6 +31,7 @@ from algorithm.fusion import FusionDetector
 from core.output_manager import OutputManager
 from core.alarm_manager import AlarmManager
 from ui.data_manager_ui import DataManagerUI
+from ui.config_ui import ConfigDialog
 import pickle
 
 try:
@@ -310,8 +311,6 @@ class MainWindow(QMainWindow):
         # 模型加载
         self.pnn_model = None
         self.yolo_model = None
-        self.load_pnn_model()
-        self.load_yolo_model("yolov8n.pt") # 默认加载
         
         self.init_ui()
         
@@ -359,10 +358,10 @@ class MainWindow(QMainWindow):
             
         try:
             # 检查路径
-            if not os.path.exists(path):
-                alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", path)
-                if os.path.exists(alt_path):
-                    path = alt_path
+            if not path or not os.path.exists(path):
+                print(f"Error: Model file not found: {path}")
+                self.yolo_model = None
+                return False
             
             self.yolo_model = YOLO(path)
             print(f"Loaded YOLO model: {path}")
@@ -397,6 +396,11 @@ class MainWindow(QMainWindow):
         left_panel.setFixedWidth(300)
         left_layout = QVBoxLayout(left_panel)
         
+        # 0. System Config
+        self.btn_config = QPushButton("System Settings (系统设置)")
+        self.btn_config.clicked.connect(self.open_settings)
+        left_layout.addWidget(self.btn_config)
+
         # 1. 输入源选择 (Media Input)
         gb_input = QGroupBox("Media Input (输入源)")
         input_layout = QVBoxLayout()
@@ -433,6 +437,9 @@ class MainWindow(QMainWindow):
         self.refresh_pnn_list()
         self.combo_pnn.currentIndexChanged.connect(self.change_pnn_model)
         algo_layout.addWidget(self.combo_pnn)
+        # Load initial PNN model
+        if self.combo_pnn.count() > 0:
+             self.change_pnn_model()
 
         # YOLO 模型选择器
         algo_layout.addWidget(QLabel("YOLO Model:"))
@@ -440,6 +447,9 @@ class MainWindow(QMainWindow):
         self.refresh_yolo_list()
         self.combo_yolo.currentIndexChanged.connect(self.change_yolo_model)
         algo_layout.addWidget(self.combo_yolo)
+        # Load initial YOLO model
+        if self.combo_yolo.count() > 0:
+             self.change_yolo_model()
         
         self.btn_start = QPushButton("Start Processing (开始)")
         self.btn_start.clicked.connect(self.start_processing)
@@ -489,38 +499,74 @@ class MainWindow(QMainWindow):
         self.source_type = None
         self.source_path = None
 
+    def open_settings(self):
+        """打开设置对话框"""
+        dialog = ConfigDialog(self)
+        if dialog.exec():
+            # 设置保存后，某些参数可能需要重启生效，
+            # 但部分参数（如 DETECT_INTERVAL）会立即生效，因为 Worker 直接读取 config
+            self.lbl_status.setText("Status: Settings Updated")
+
     def refresh_yolo_list(self):
         """刷新 YOLO 模型列表"""
         self.combo_yolo.clear()
-        # 添加默认
-        self.combo_yolo.addItem("yolov8n.pt")
         
-        # 扫描 models/ 目录
-        models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        models_dir = os.path.join(base_dir, "models")
+        
+        # Ensure models dir exists
+        if not os.path.exists(models_dir):
+            try:
+                os.makedirs(models_dir)
+            except OSError:
+                pass
+            
+        # 1. Scan models/ directory for ALL .pt files
         if os.path.exists(models_dir):
             files = glob.glob(os.path.join(models_dir, "*.pt"))
             for f in files:
-                self.combo_yolo.addItem(os.path.basename(f))
+                name = os.path.basename(f)
+                self.combo_yolo.addItem(name, f)
+        
+        # 2. Check for local training results
+        local_best = os.path.join(base_dir, "runs", "detect", "train", "weights", "best.pt")
+        if os.path.exists(local_best):
+            self.combo_yolo.addItem("Local Best (runs/.../best.pt)", local_best)
+
+        # 3. If no models found
+        if self.combo_yolo.count() == 0:
+            self.combo_yolo.addItem("No models found in models/", "")
 
     def refresh_pnn_list(self):
         """刷新 PNN 模型列表"""
         self.combo_pnn.clear()
-        # 遗留/默认
-        self.combo_pnn.addItem("pnn_latest.pkl")
-        self.combo_pnn.addItem("model_pnn.pkl")
         
-        models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        models_dir = os.path.join(base_dir, "models")
+        
+        # 1. Scan models/ directory for .pkl files
         if os.path.exists(models_dir):
             files = glob.glob(os.path.join(models_dir, "*.pkl"))
             for f in files:
                 name = os.path.basename(f)
-                if name != "pnn_latest.pkl": 
-                    self.combo_pnn.addItem(name)
+                self.combo_pnn.addItem(name, f)
+
+        # 2. Check for legacy model_pnn.pkl in root
+        root_pnn = os.path.join(base_dir, "model_pnn.pkl")
+        if os.path.exists(root_pnn):
+             self.combo_pnn.addItem("model_pnn.pkl (Root)", "model_pnn.pkl")
+
+        if self.combo_pnn.count() == 0:
+             self.combo_pnn.addItem("No PNN models found", "")
                 
     def change_yolo_model(self):
-        model_name = self.combo_yolo.currentText()
-        if self.load_yolo_model(model_name):
-            self.lbl_status.setText(f"Loaded: {model_name}")
+        path = self.combo_yolo.currentData()
+        if not path:
+             # If no path in data, it might be the "No models found" item or text-only
+             return
+
+        if self.load_yolo_model(path):
+            self.lbl_status.setText(f"Loaded: {os.path.basename(path)}")
             # 如果正在运行，重启
             if self.worker and self.worker.isRunning():
                 self.stop_processing()
@@ -528,13 +574,27 @@ class MainWindow(QMainWindow):
 
     def change_pnn_model(self):
         model_name = self.combo_pnn.currentText()
-        if self.load_pnn_model(model_name):
+        # Handle custom data (e.g. legacy root path)
+        model_data = self.combo_pnn.currentData()
+        path = model_data if model_data else model_name
+        
+        if not path: return
+
+        if self.load_pnn_model(path):
             self.lbl_status.setText(f"Loaded PNN: {model_name}")
             # 如果正在运行，重启
             if self.worker and self.worker.isRunning():
                 self.stop_processing()
                 self.start_processing()
         
+    def open_settings(self):
+        """打开设置对话框"""
+        dialog = ConfigDialog(self)
+        if dialog.exec():
+            # 设置保存后，某些参数可能需要重启生效，
+            # 但部分参数（如 DETECT_INTERVAL）会立即生效，因为 Worker 直接读取 config
+            self.lbl_status.setText("Status: Settings Updated")
+
     def upload_image(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Images (*.png *.jpg *.bmp)")
         if path:
