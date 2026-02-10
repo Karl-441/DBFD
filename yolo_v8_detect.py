@@ -17,7 +17,7 @@ from core.output_manager import OutputManager
 
 def main():
     """
-    主函数 (Main Function)
+    主函数
         1. 解析命令行参数 (--image, --model)
         2. 自动查找可能的模型权重文件
         3. 加载 YOLO 模型

@@ -46,6 +46,7 @@ class ConfigManager:
         # ==========================================
         self.USE_PNN = True
         self.USE_YOLO = False
+        self.DEVICE = 'cpu'  # cpu, 0, mps, auto
 
         # ==========================================
         # 路径配置pathlib

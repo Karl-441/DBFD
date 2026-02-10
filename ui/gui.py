@@ -54,7 +54,7 @@ class AlgorithmWorker(QThread):
         在后台执行耗时的图像处理和模型推理任务。
         通过信号将处理结果（图像、FPS、检测状态）发送回主线程进行显示。
     """
-    # 信号定义: 图像数据(ndarray), FPS(float), 是否发现火灾(bool)
+    # 信号定义: 图像数据, FPS, 是否发现火灾
     result_signal = pyqtSignal(object, object, bool) 
     
     def __init__(self, source_type, source_path, algorithm_type, pnn_model, yolo_model):
@@ -282,7 +282,8 @@ class AlgorithmWorker(QThread):
         """YOLO 检测流程"""
         if self.yolo_model is None: return []
         try:
-            results = self.yolo_model(img, verbose=False)
+            # Pass device config to inference
+            results = self.yolo_model(img, verbose=False, device=config.DEVICE)
             detections = []
             for r in results:
                 for box in r.boxes:
@@ -312,12 +313,12 @@ class MainWindow(QMainWindow):
         self.pnn_model = None
         self.yolo_model = None
         
-        self.init_ui()
-        
         self.worker = None
         self.current_image = None
         self.recording = False
         self.video_writer = None
+        
+        self.init_ui()
         
     def load_pnn_model(self, path=None):
         """加载 PNN 模型"""
@@ -425,6 +426,10 @@ class MainWindow(QMainWindow):
         # 2. 算法控制 (Algorithm Control)
         gb_algo = QGroupBox("Algorithm Control (算法控制)")
         algo_layout = QVBoxLayout()
+        
+        # Initialize status label early to avoid AttributeError during model loading
+        self.lbl_status = QLabel("Status: Idle")
+        
         algo_layout.addWidget(QLabel("Select Algorithm (选择算法):"))
         self.combo_algo = QComboBox()
         self.combo_algo.addItems(["PNN (Color+Texture)", "YOLO (Deep Learning)", "FUSION (Best Accuracy)"])
@@ -459,7 +464,6 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         algo_layout.addWidget(self.btn_start)
         algo_layout.addWidget(self.btn_stop)
-        self.lbl_status = QLabel("Status: Idle")
         algo_layout.addWidget(self.lbl_status)
         gb_algo.setLayout(algo_layout)
         
@@ -643,6 +647,15 @@ class MainWindow(QMainWindow):
             
     def start_processing(self):
         if not self.source_type: return
+        
+        # Enable OpenCL if using GPU acceleration
+        if config.DEVICE != 'cpu':
+            try:
+                cv2.ocl.setUseOpenCL(True)
+                print(f"OpenCL enabled: {cv2.ocl.useOpenCL()}")
+            except Exception as e:
+                print(f"Failed to enable OpenCL: {e}")
+        
         algo_map = {0: 'PNN', 1: 'YOLO', 2: 'FUSION'}
         algo = algo_map[self.combo_algo.currentIndex()]
         

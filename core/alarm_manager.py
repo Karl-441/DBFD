@@ -108,11 +108,24 @@ class AlarmManager:
                 logger.error(f"Error turning alarm OFF: {e}")
         logger.info("ALARM OFF (报警关闭)")
 
+    def reconfigure(self):
+        """重新加载配置并初始化 GPIO"""
+        self.cleanup_gpio()
+        self.pin = config.ALARM_GPIO_PIN
+        self.active_high = config.ALARM_ACTIVE_HIGH
+        self.cooldown = config.ALARM_COOLDOWN
+        self._setup_gpio()
+        logger.info(f"AlarmManager reconfigured: Pin={self.pin}, ActiveHigh={self.active_high}")
+
     def trigger(self):
         """
             触发报警。如果已经在报警中，则重置冷却计时器，延长报警时间。
             启动后台线程监控报警持续时间。
         """
+        # 检查配置是否变更
+        if self.pin != config.ALARM_GPIO_PIN or self.active_high != config.ALARM_ACTIVE_HIGH:
+            self.reconfigure()
+
         self.last_trigger_time = time.time()
         
         if not self.is_alarming:
@@ -122,27 +135,21 @@ class AlarmManager:
             self.alarm_thread = threading.Thread(target=self._monitor_alarm, daemon=True)
             self.alarm_thread.start()
 
-    def _monitor_alarm(self):
-        """
-            保持报警开启直到冷却时间结束。
-        """
-        while self.running and self.is_alarming:
-            elapsed = time.time() - self.last_trigger_time
-            if elapsed > self.cooldown:
-                self._turn_off()
-                self.is_alarming = False
-                break
-            time.sleep(0.5)
+    def cleanup_gpio(self):
+        """释放 GPIO 资源"""
+        if self.gpio_ok:
+            try:
+                if self.device:
+                    self.device.close()
+                    self.device = None
+                elif GPIO_LIB == "RPi.GPIO":
+                    GPIO.cleanup(self.pin)
+            except:
+                pass
+        self.gpio_ok = False
 
     def cleanup(self):
         """清理资源 (Cleanup)"""
         self.running = False
         self._turn_off()
-        if self.gpio_ok:
-            try:
-                if self.device:
-                    self.device.close()
-                elif GPIO_LIB == "RPi.GPIO":
-                    GPIO.cleanup(self.pin)
-            except:
-                pass
+        self.cleanup_gpio()

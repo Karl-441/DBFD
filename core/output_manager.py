@@ -99,18 +99,34 @@ class OutputManager:
         # cv2.imwrite 在某些系统上不支持 Path 对象，需转为字符串
         cv2.imwrite(str(img_path), image)
         
-        # 保存元数据 (JSON)
+        # 保存元数据
         if metadata or detections:
-            json_path = img_path.with_suffix('.json')
-            
-            data = {
+            meta_path = img_path.with_suffix('.json')
+            meta_data = {
                 "timestamp": datetime.now().isoformat(),
-                "filename": filename,
-                "detections": detections, # 假设 detections 已经是可序列化格式
+                "detections": detections,
                 "metadata": metadata or {}
             }
-            
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4)
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(meta_data, f, indent=4)
                 
         return img_path
+
+    def log_metric(self, key, value):
+        """
+        记录运行时指标到日志文件
+        参数:
+            key: 指标名称 (如 'fps')
+            value: 指标值
+        """
+        today = datetime.now().strftime("%Y%m%d")
+        log_file = self.base_dir / "logs" / f"metrics_{today}.log"
+        
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        log_entry = f"{timestamp} - {key}: {value}\n"
+        
+        try:
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except Exception as e:
+            print(f"Error logging metric: {e}")
