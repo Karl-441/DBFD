@@ -1,6 +1,6 @@
 # DBFD - Raspberry Pi Edition
 
-Optimized Fire Detection System for Raspberry Pi 4B.
+Optimized Fire Detection System for Raspberry Pi 4B&5B.
 
 ## Features
 - **Low Memory Footprint**: Uses PNN algorithm by default (<500MB RAM).
