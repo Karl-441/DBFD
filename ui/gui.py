@@ -239,9 +239,11 @@ class AlgorithmWorker(QThread):
             cv2.rectangle(vis, (x, y), (x+w, y+h), color, 2)
             cv2.putText(vis, label, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
-        # 3. 触发报警
+        # 3. 触发/停止报警
         if self.last_has_fire:
             self.alarm_manager.trigger()
+        else:
+            self.alarm_manager.stop()
             
         return vis, self.last_has_fire
 

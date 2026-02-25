@@ -10,7 +10,7 @@ import config
     支持GPIO控制，兼容gpiozero和 RPi.GPIO
 """
 
-# 尝试导入 GPIO 库，优先使用 gpiozero (Pi 5 兼容性更好)
+# 尝试导入 GPIO 库，优先使用 gpiozero
 try:
     from gpiozero import OutputDevice
     from gpiozero.pins.lgpio import LGPIOFactory
@@ -134,6 +134,25 @@ class AlarmManager:
             # 启动守护线程监控超时自动关闭
             self.alarm_thread = threading.Thread(target=self._monitor_alarm, daemon=True)
             self.alarm_thread.start()
+
+    def stop(self):
+        """
+        停止报警 (Stop Alarm)
+        检查配置更新，并确保处于非报警状态。
+        """
+        # 1. 检查配置是否需要更新
+        if self.pin != config.ALARM_GPIO_PIN or self.active_high != config.ALARM_ACTIVE_HIGH:
+            self.reconfigure()
+            # reconfigure 已经重置了 GPIO 状态，不需要再调 _turn_off
+            # 但我们需要重置内部状态
+            self.is_alarming = False
+            return
+
+        # 2. 如果正在报警，强制关闭
+        if self.is_alarming:
+            self.is_alarming = False
+            self._turn_off()
+            logger.info("Alarm stopped (Signal Lost)")
 
     def cleanup_gpio(self):
         """释放 GPIO 资源"""

@@ -21,13 +21,8 @@ def main():
     主函数
         1. 解析命令行参数 (--headless, --camera)
         2. 初始化并启动内存监控器
-        3. 根据模式启动应用 (GUI 或 Headless)
+        3. 根据模式启动应用
         4. 处理异常和清理资源
-    参数:
-        无 (通过 sys.argv 获取)
-        
-    返回值:
-        无
     """
     # 初始化参数解析器
     parser = argparse.ArgumentParser(description="DBFD Raspberry Pi Edition (树莓派火灾检测系统)")
