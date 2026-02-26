@@ -23,7 +23,6 @@ class ConfigManager:
         self.DETECT_INTERVAL = 3
         self.PNN_TARGET_WIDTH = 160
         self.PNN_TARGET_HEIGHT = 120
-        self.PNN_MAX_SAMPLES = 100
 
         # ==========================================
         # 报警设置 

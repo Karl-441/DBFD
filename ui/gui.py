@@ -30,7 +30,6 @@ from algorithm.pnn import PNN
 from algorithm.fusion import FusionDetector
 from core.output_manager import OutputManager
 from core.alarm_manager import AlarmManager
-from ui.data_manager_ui import DataManagerUI
 from ui.config_ui import ConfigDialog
 import pickle
 
@@ -380,13 +379,12 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         self.setCentralWidget(tabs)
         
-        # 标签页 1: 实时检测
+        # 实时检测
         detection_widget = QWidget()
         self.setup_detection_ui(detection_widget)
         tabs.addTab(detection_widget, "Real-time Detection (实时检测)")
         
-        # 标签页 2: 数据管理 (预留)
-        # data_widget = DataManagerUI()
+        # 数据管理
         # tabs.addTab(data_widget, "Data Management")
         pass
         
@@ -534,10 +532,10 @@ class MainWindow(QMainWindow):
                 name = os.path.basename(f)
                 self.combo_yolo.addItem(name, f)
         
-        # 2. Check for local training results
-        local_best = os.path.join(base_dir, "runs", "detect", "train", "weights", "best.pt")
-        if os.path.exists(local_best):
-            self.combo_yolo.addItem("Local Best (runs/.../best.pt)", local_best)
+        # 2. Check for local training results - REMOVED for inference only version
+        # local_best = os.path.join(base_dir, "runs", "detect", "train", "weights", "best.pt")
+        # if os.path.exists(local_best):
+        #    self.combo_yolo.addItem("Local Best (runs/.../best.pt)", local_best)
 
         # 3. If no models found
         if self.combo_yolo.count() == 0:

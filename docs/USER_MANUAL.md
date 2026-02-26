@@ -39,7 +39,7 @@ The left panel allows you to select the input source:
 - **Start/Stop Recording**: Records the processed video stream to an AVI file.
 
 ## 5. Troubleshooting
-- **PNN Model Error**: Ensure `train_pnn.py` has been run to generate `model_pnn.pkl`.
+- **PNN Model Error**: Ensure `model_pnn.pkl` is present in the `models/` directory or project root.
 - **Camera Error**: Ensure no other application is using the camera.
 - **Performance**: High-resolution screen capture or video might reduce FPS. Resize the input or use a more powerful GPU for YOLO.
 
