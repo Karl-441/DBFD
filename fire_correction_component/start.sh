@@ -12,7 +12,7 @@ echo "===================================================="
 # 检查 Python3
 if ! command -v python3 &> /dev/null
 then
-    echo "错误: 未找到 python3。请运行 'sudo apt update && sudo apt install python3 python3-venv' 安装。"
+    echo "错误: 未找到 python3。请先运行: sudo apt update && sudo apt install python3 python3-venv python3-pyqt6 python3-opencv python3-pil"
     exit 1
 fi
 
@@ -22,8 +22,9 @@ ROOT_DIR="$(cd "$DIR/.." && pwd)"
 VENV_DIR="$ROOT_DIR/venv"
 
 if [ ! -d "$VENV_DIR" ]; then
-    echo "[1/3] 正在项目根目录创建虚拟环境 (venv)..."
-    python3 -m venv "$VENV_DIR"
+    echo "[1/3] 正在项目根目录创建虚拟环境 (使用 --system-site-packages 以适配树莓派 PyQt6/OpenCV)..."
+    # 使用 --system-site-packages 允许虚拟环境访问 apt 安装的 PyQt6 和 OpenCV
+    python3 -m venv --system-site-packages "$VENV_DIR"
     if [ $? -ne 0 ]; then
         echo "错误: 创建虚拟环境失败。可能需要安装 python3-venv: sudo apt install python3-venv"
         exit 1

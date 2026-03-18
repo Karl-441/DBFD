@@ -80,7 +80,7 @@ class OutputManager:
         保存检测到火焰的图片，并可选地保存包含检测框信息的 JSON 元数据文件。
         参数:
             image: 图像数据 (numpy array)
-            detections: 检测框列表
+            detections: 检测框列表 [(x, y, w, h, label, color), ...]
             metadata: 额外的元数据字典 (可选)
             filename: 文件名 (可选)
         返回值:
@@ -99,16 +99,44 @@ class OutputManager:
         # cv2.imwrite 在某些系统上不支持 Path 对象，需转为字符串
         cv2.imwrite(str(img_path), image)
         
-        # 保存元数据
-        if metadata or detections:
-            meta_path = img_path.with_suffix('.json')
-            meta_data = {
-                "timestamp": datetime.now().isoformat(),
-                "detections": detections,
-                "metadata": metadata or {}
-            }
+        # 保存元数据 (兼容 fire_correction_component 要求)
+        meta_path = img_path.with_suffix('.json')
+        
+        # 转换 detections 格式为 JSON 可序列化格式
+        serializable_dets = []
+        for det in detections:
+            if len(det) >= 4:
+                x, y, w, h = det[0:4]
+                label = det[4] if len(det) > 4 else "fire"
+                conf = 1.0 # 默认为 1.0 如果没有提供
+                # 尝试从 label 中解析置信度 (例如 "FIRE (YOLO) 0.85")
+                try:
+                    parts = str(label).split()
+                    if len(parts) > 1 and parts[-1].replace('.','',1).isdigit():
+                        conf = float(parts[-1])
+                except:
+                    pass
+                
+                serializable_dets.append({
+                    "bbox": [int(x), int(y), int(w), int(h)],
+                    "label": str(label),
+                    "confidence": float(conf)
+                })
+
+        meta_data = {
+            "version": "2.0",
+            "timestamp": datetime.now().isoformat(),
+            "source_file": str(img_path.name),
+            "image_size": [image.shape[1], image.shape[0]], # [width, height]
+            "detections": serializable_dets,
+            "metadata": metadata or {}
+        }
+        
+        try:
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_data, f, indent=4)
+        except Exception as e:
+            print(f"Error saving metadata JSON: {e}")
                 
         return img_path
 

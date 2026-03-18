@@ -73,6 +73,7 @@ class AlgorithmWorker(QThread):
         self.running = True
         self.paused = False
         self.frame_count = 0
+        self.output_interval = 3 # 每 3 帧保存一次处理后的图像
         
         # 缓存上一帧的检测结果，用于跳帧时的绘制
         self.last_detections = [] 
@@ -198,6 +199,18 @@ class AlgorithmWorker(QThread):
                 
                 fps = 1.0 / (time.time() - start_time)
                 self.result_signal.emit(res_frame, fps, has_fire)
+                
+                # --- 新增：每处理 3 帧保存一次包含检测框的图像和 JSON ---
+                if has_fire and (self.frame_count % self.output_interval == 0):
+                    self.output_manager.save_prediction(
+                        res_frame, 
+                        self.last_detections, 
+                        metadata={
+                            "fps": round(fps, 2),
+                            "algorithm": self.algorithm_type,
+                            "frame_id": self.frame_count
+                        }
+                    )
                 
                 # 立即清理
                 del frame

@@ -6,30 +6,30 @@ RPi.GPIO
 ncnn
 pnnx
 
-# GUI
-PyQt6==6.6.1
-PyQt6-Qt6==6.6.1
-PyQt6-sip==13.6.0
+# GUI - On Pi, install via apt: sudo apt install python3-pyqt6
+PyQt6
+PyQt6-Qt6
+PyQt6-sip
 
-# Data Processing
-numpy==1.26.4
-opencv-python==4.9.0.80
-PyYAML==6.0.1
+# Data Processing - On Pi, install via apt: sudo apt install python3-opencv
+numpy
+opencv-python
+PyYAML
 sqlite3-binary; platform_system != 'Linux'
 
 # Model & Training
-ultralytics==8.1.0
-optuna==3.5.0
-tensorboard==2.15.1
-torch>=2.1.2
-torchvision>=0.16.2
+ultralytics
+optuna
+tensorboard
+torch
+torchvision
 
 # Testing
 pytest==7.4.4
 pytest-qt==4.4.0
 pytest-cov==4.1.0
 
-# Utilities
-watchdog==3.0.0
-Pillow==10.2.0
-requests==2.31.0
+# Utilities - On Pi, install via apt: sudo apt install python3-pil
+watchdog
+Pillow
+requests

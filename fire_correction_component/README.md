@@ -17,7 +17,12 @@
 ## 快速开始
 
 ### 1. 一键启动 (推荐用于树莓派/Linux)
-在 Linux (如 Raspberry Pi OS 5) 下，您可以使用一键启动脚本，它会自动创建虚拟环境并安装所有依赖：
+在 Linux (如 Raspberry Pi OS 5) 下，建议先安装系统级库以避免编译错误（特别是 Pillow、PyQt6 和 OpenCV）：
+```bash
+sudo apt update
+sudo apt install python3-pyqt6 python3-opencv python3-pil python3-venv
+```
+然后执行脚本，它将自动创建虚拟环境并引用上述系统库：
 ```bash
 chmod +x start.sh
 ./start.sh
