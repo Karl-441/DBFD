@@ -2,10 +2,34 @@ psutil
 scikit-image
 scipy
 mss
-# Core dependencies (try installing via apt first on Pi: sudo apt install python3-opencv python3-pyqt6)
-opencv-python
-PyQt6
-ultralytics
 RPi.GPIO
 ncnn
 pnnx
+
+# GUI
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
+
+# Data Processing
+numpy==1.26.4
+opencv-python==4.9.0.80
+PyYAML==6.0.1
+sqlite3-binary; platform_system != 'Linux'
+
+# Model & Training
+ultralytics==8.1.0
+optuna==3.5.0
+tensorboard==2.15.1
+torch>=2.1.2
+torchvision>=0.16.2
+
+# Testing
+pytest==7.4.4
+pytest-qt==4.4.0
+pytest-cov==4.1.0
+
+# Utilities
+watchdog==3.0.0
+Pillow==10.2.0
+requests==2.31.0

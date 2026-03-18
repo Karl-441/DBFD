@@ -16,10 +16,13 @@ then
     exit 1
 fi
 
-# 1. 创建虚拟环境 (PEP 668 合规)
-VENV_DIR="$DIR/venv"
+# 1. 检查或创建项目根目录的虚拟环境 (PEP 668 合规)
+# 根目录相对于组件目录是 ..
+ROOT_DIR="$(cd "$DIR/.." && pwd)"
+VENV_DIR="$ROOT_DIR/venv"
+
 if [ ! -d "$VENV_DIR" ]; then
-    echo "[1/3] 正在创建虚拟环境 (venv)..."
+    echo "[1/3] 正在项目根目录创建虚拟环境 (venv)..."
     python3 -m venv "$VENV_DIR"
     if [ $? -ne 0 ]; then
         echo "错误: 创建虚拟环境失败。可能需要安装 python3-venv: sudo apt install python3-venv"
@@ -27,20 +30,18 @@ if [ ! -d "$VENV_DIR" ]; then
     fi
 fi
 
-# 2. 激活虚拟环境并安装依赖
-echo "[2/3] 正在检查并安装 Python 依赖..."
+# 2. 激活根目录虚拟环境并安装依赖
+echo "[2/3] 正在检查并安装项目依赖 (使用根目录 requirements.txt)..."
 source "$VENV_DIR/bin/activate"
 
 # 升级 pip
 pip install --quiet --upgrade pip
 
-if [ -f "requirements.txt" ]; then
-    # 在树莓派上安装某些科学计算库（如 numpy, opencv）可能较慢，建议使用 piwheels 或预编译版本
-    # 这里直接使用 pip，树莓派官方源通常会提供加速
-    pip install -r requirements.txt
+ROOT_REQ="$ROOT_DIR/requirements.txt"
+if [ -f "$ROOT_REQ" ]; then
+    pip install -r "$ROOT_REQ"
 else
-    echo "错误: 未找到 requirements.txt，请确保项目完整。"
-    exit 1
+    echo "警告: 未找到根目录 requirements.txt。"
 fi
 
 # 3. 设置环境变量以适配 Raspberry Pi OS 5 (Bookworm/Wayland)
