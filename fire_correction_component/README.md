@@ -16,23 +16,24 @@
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 一键启动 (推荐用于树莓派/Linux)
+在 Linux (如 Raspberry Pi OS 5) 下，您可以使用一键启动脚本，它会自动创建虚拟环境并安装所有依赖：
 ```bash
-pip install -r requirements.txt
-# 或者使用 setup.py 安装
-python setup.py install
+chmod +x start.sh
+./start.sh
 ```
 
-### 2. 配置说明
-编辑根目录下的 `config.yaml` 文件：
+### 2. 手动安装 (Windows/其他)
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+### 3. 配置说明
+您可以直接在程序中点击 **"Settings"** 按钮来修改配置，也可以手动编辑 `config.yaml`：
 - `input.base_dir`: 模型输出文件夹路径（默认为 `../runs`）。
 - `training.base_model_path`: 原始权重文件路径。
 - `gui.reviewer_list`: 审核人员名单。
-
-### 3. 启动组件
-```bash
-python main.py
-```
 
 ### 4. 运行测试
 ```bash
