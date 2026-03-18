@@ -16,12 +16,17 @@ try:
     from gpiozero.pins.lgpio import LGPIOFactory
     GPIO_LIB = "gpiozero"
 except ImportError:
-    # 降级到 RPi.GPIO (Legacy)
+    # 尝试直接使用 lgpio (树莓派 5 推荐)
     try:
-        import RPi.GPIO as GPIO
-        GPIO_LIB = "RPi.GPIO"
+        import lgpio
+        GPIO_LIB = "lgpio"
     except ImportError:
-        GPIO_LIB = None
+        # 降级到 RPi.GPIO (Legacy)
+        try:
+            import RPi.GPIO as GPIO
+            GPIO_LIB = "RPi.GPIO"
+        except ImportError:
+            GPIO_LIB = None
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +44,8 @@ class AlarmManager:
         self.last_trigger_time = 0
         self.alarm_thread = None
         self.running = True
-        self.device = None
+        self.device = None # 用于 gpiozero
+        self.chip = None   # 用于 lgpio
         self.gpio_ok = False
         
         self._setup_gpio()
@@ -50,22 +56,32 @@ class AlarmManager:
         """
         if GPIO_LIB == "gpiozero":
             try:
-                # 使用 OutputDevice 进行通用控制
-                # active_high=False 意味着 on() 会输出低电平 (针对低电平触发模块)
-                # initial_value=False 意味着初始状态为 "Off" (即高电平，如果 active_high=False)
-                self.device = OutputDevice(
-                    self.pin, 
-                    active_high=self.active_high, 
-                    initial_value=False
-                )
+                # 显式尝试使用 LGPIO 驱动 (Pi 5 兼容)
+                try:
+                    factory = LGPIOFactory()
+                    self.device = OutputDevice(self.pin, active_high=self.active_high, pin_factory=factory)
+                except:
+                    self.device = OutputDevice(self.pin, active_high=self.active_high)
+                
                 self.gpio_ok = True
                 logger.info(f"Alarm Manager initialized using gpiozero on GPIO {self.pin}")
             except Exception as e:
                 logger.error(f"Failed to setup Alarm (gpiozero): {e}")
                 self.gpio_ok = False
+        
+        elif GPIO_LIB == "lgpio":
+            try:
+                self.chip = lgpio.gpiochip_open(0) # RP1 chip on Pi 5 is usually 0
+                lgpio.gpio_claim_output(self.chip, self.pin)
+                self.gpio_ok = True
+                logger.info(f"Alarm Manager initialized using lgpio on GPIO {self.pin}")
+            except Exception as e:
+                logger.error(f"Failed to setup Alarm (lgpio): {e}")
+                self.gpio_ok = False
                 
         elif GPIO_LIB == "RPi.GPIO":
             try:
+                # 只有非 Pi 5 环境下 RPi.GPIO 才能正常确定 SOC 地址
                 GPIO.setmode(GPIO.BCM)
                 GPIO.setup(self.pin, GPIO.OUT)
                 
@@ -79,16 +95,19 @@ class AlarmManager:
                 logger.error(f"Failed to setup Alarm (RPi.GPIO): {e}")
                 self.gpio_ok = False
         else:
-            logger.warning("No GPIO library found. Alarm disabled (Simulation Mode). (未找到 GPIO 库，进入模拟模式)")
+            logger.warning("No GPIO library found. Alarm disabled.")
             self.gpio_ok = False
 
     def _turn_on(self):
-        """打开报警器 (Turn On Alarm)"""
+        """打开报警器"""
         if self.gpio_ok:
             try:
-                if self.device: # gpiozero
+                if GPIO_LIB == "gpiozero":
                     self.device.on()
-                else: # RPi.GPIO
+                elif GPIO_LIB == "lgpio":
+                    val = 1 if self.active_high else 0
+                    lgpio.gpio_write(self.chip, self.pin, val)
+                elif GPIO_LIB == "RPi.GPIO":
                     state = GPIO.HIGH if self.active_high else GPIO.LOW
                     GPIO.output(self.pin, state)
             except Exception as e:
@@ -99,14 +118,17 @@ class AlarmManager:
         """关闭报警器"""
         if self.gpio_ok:
             try:
-                if self.device: # gpiozero
+                if GPIO_LIB == "gpiozero":
                     self.device.off()
-                else: # RPi.GPIO
+                elif GPIO_LIB == "lgpio":
+                    val = 0 if self.active_high else 1
+                    lgpio.gpio_write(self.chip, self.pin, val)
+                elif GPIO_LIB == "RPi.GPIO":
                     state = GPIO.LOW if self.active_high else GPIO.HIGH
                     GPIO.output(self.pin, state)
             except Exception as e:
                 logger.error(f"Error turning alarm OFF: {e}")
-        logger.info("ALARM OFF (报警关闭)")
+        logger.info("ALARM OFF. (报警关闭)")
 
     def reconfigure(self):
         """重新加载配置并初始化 GPIO"""
@@ -119,40 +141,25 @@ class AlarmManager:
 
     def trigger(self):
         """
-            触发报警。如果已经在报警中，则重置冷却计时器，延长报警时间。
-            启动后台线程监控报警持续时间。
+        打开报警器
         """
         # 检查配置是否变更
         if self.pin != config.ALARM_GPIO_PIN or self.active_high != config.ALARM_ACTIVE_HIGH:
             self.reconfigure()
 
-        self.last_trigger_time = time.time()
-        
         if not self.is_alarming:
             self.is_alarming = True
             self._turn_on()
-            # 启动守护线程监控超时自动关闭
-            self.alarm_thread = threading.Thread(target=self._monitor_alarm, daemon=True)
-            self.alarm_thread.start()
+            logger.info("Alarm Triggered (ON)")
 
     def stop(self):
         """
-        停止报警 (Stop Alarm)
-        检查配置更新，并确保处于非报警状态。
+        关闭报警器
         """
-        # 1. 检查配置是否需要更新
-        if self.pin != config.ALARM_GPIO_PIN or self.active_high != config.ALARM_ACTIVE_HIGH:
-            self.reconfigure()
-            # reconfigure 已经重置了 GPIO 状态，不需要再调 _turn_off
-            # 但我们需要重置内部状态
-            self.is_alarming = False
-            return
-
-        # 2. 如果正在报警，强制关闭
         if self.is_alarming:
             self.is_alarming = False
             self._turn_off()
-            logger.info("Alarm stopped (Signal Lost)")
+            logger.info("Alarm Stopped (OFF)")
 
     def cleanup_gpio(self):
         """释放 GPIO 资源"""
@@ -168,7 +175,7 @@ class AlarmManager:
         self.gpio_ok = False
 
     def cleanup(self):
-        """清理资源 (Cleanup)"""
+        """清理资源"""
         self.running = False
         self._turn_off()
         self.cleanup_gpio()

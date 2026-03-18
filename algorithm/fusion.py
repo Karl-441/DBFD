@@ -3,6 +3,7 @@ import numpy as np
 import config
 from algorithm.preprocess import preprocess_image
 from algorithm.features import extract_features
+from algorithm.yolo_detector import YoloDetector
 
 """
 多模态融合检测模块 
@@ -12,18 +13,18 @@ from algorithm.features import extract_features
 """
 
 class FusionDetector:
-    def __init__(self, pnn_model, yolo_model):
+    def __init__(self, pnn_model, yolo_detector):
         """
         初始化融合检测器
         参数:
             pnn_model: 已训练的 PNN 模型实例
-            yolo_model: 已加载的 YOLO 模型实例 (或 None)
+            yolo_detector: YoloDetector 实例 (或 None)
         """
         self.pnn = pnn_model
-        self.yolo = yolo_model
+        self.yolo_detector = yolo_detector
         
         # 配置参数
-        self.yolo_conf_thresh = 0.4 # YOLO 基础置信度阈值
+        self.yolo_conf_thresh = config.YOLO_CONF_THRESH # YOLO 基础置信度阈值
         self.pnn_iou_thresh = 0.1   # PNN 重叠阈值 (只要有重叠就认为相关)
         
     def detect(self, img):
@@ -38,14 +39,27 @@ class FusionDetector:
         """
         # 1. 运行 YOLO 检测 (Run YOLO)
         yolo_boxes = [] # 格式: (x, y, w, h, conf)
-        if self.yolo:
-            results = self.yolo(img, verbose=False)
+        if self.yolo_detector:
+            # 使用 detector 的检测逻辑，但可能需要返回置信度以供融合
+            # 这里的 yolo_detector.model 还是原始模型
+            results = self.yolo_detector.model(img, verbose=False, conf=self.yolo_conf_thresh)
             for r in results:
+                names = r.names
                 for box in r.boxes:
-                    # class 0 通常是火焰 (fire)
-                    if int(box.cls[0]) == 0:
-                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                        conf = float(box.conf[0])
+                    cls_idx = int(box.cls[0].item())
+                    cls_name = names.get(cls_idx, "").lower()
+                    
+                    # 识别逻辑保持一致
+                    is_fire = False
+                    if "fire" in cls_name or "smoke" in cls_name:
+                        is_fire = True
+                    elif cls_idx == 0 and "person" not in cls_name:
+                        is_fire = True
+                        
+                    if is_fire:
+                        xyxy = box.xyxy[0].cpu().numpy()
+                        conf = float(box.conf[0].item())
+                        x1, y1, x2, y2 = xyxy
                         w = x2 - x1
                         h = y2 - y1
                         yolo_boxes.append({'box': [int(x1), int(y1), int(w), int(h)], 'conf': conf})

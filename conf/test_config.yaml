@@ -1,0 +1,25 @@
+# DBFD-Raspberry Performance Test Configuration
+
+# Test duration (seconds)
+test_duration: 300
+# Idle baseline duration (seconds)
+baseline_duration: 30
+# Sampling frequency (Hz)
+sampling_hz: 1
+# Temperature threshold for safety (Celsius)
+temp_threshold: 80
+# Log level for the main application
+log_level: "INFO"
+# Output directory for results
+output_dir: "results"
+
+# System monitoring configuration
+monitoring:
+  cpu: true
+  gpu: true
+  temp: true
+  fps: true
+  latency: true
+
+# Application command to run
+app_cmd: "python3 main.py --headless"

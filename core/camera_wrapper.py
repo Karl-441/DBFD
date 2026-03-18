@@ -1,4 +1,5 @@
 import subprocess
+import os
 import numpy as np
 import cv2
 import time
@@ -66,29 +67,53 @@ class LibCameraWrapper:
         return False
 
     def _build_command(self):
-        """构建 libcamera 命令行参数"""
+        """构建 libcamera 命令行参数 (H.264 兼容模式)"""
+        # 使用最基础的 H.264 参数，确保在所有 Pi 版本上都能启动
         cmd = [
             self.cmd_base,
-            "-t", "0", # 无限时长
+            "-t", "0", 
             "--width", str(self.width),
             "--height", str(self.height),
             "--framerate", str(self.fps),
-            "--nopreview", # 不显示预览窗口
-            "--codec", "libav", # 使用 libav 编码
-            "--libav-format", "mpegts", # MPEG-TS 容器格式，适合流传输
-            "-o", f"udp://127.0.0.1:{self.udp_port}?pkt_size=1316" # 推流到本地 UDP
+            "--nopreview",
+            "--codec", "h264",
+            "--inline", # 必须内联报头，否则 OpenCV 无法在中途切入流
+            "--profile", "baseline", # 强制使用 baseline profile，禁用 B 帧以降低延迟并修复 POC 错误
+            "--intra", "15", # 每 15 帧强制一个 I 帧 (0.5s @ 30fps)，解决 "non-existing PPS" 同步问题
+            "--denoise", "cdn_off", # 关闭降噪以减少启动和处理延迟
+            "--flush", # 强制刷新输出缓冲区
+            "-o", f"udp://127.0.0.1:{self.udp_port}?pkt_size=1316" # 优化 UDP 包大小
         ]
-        
-        # Pi 5 优化: 强制使用 baseline profile 以避免 B-frames (减少延迟)
-        # 目前禁用，因可能与某些 Trixie libav 版本冲突
-        # if self.is_pi5:
-        #    cmd.extend(["--libav-video-codec-opts", "profile=baseline"])
-            
         return cmd
+
+    def release(self):
+        """释放资源"""
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+        
+        if self.process:
+            try:
+                # 杀死整个进程组，确保彻底清理
+                os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+                self.process.wait(timeout=1.0)
+            except:
+                pass
+            self.process = None
+        
+        if hasattr(self, 'stderr_log') and self.stderr_log:
+            try:
+                self.stderr_log.close()
+            except:
+                pass
+        
+        self._kill_existing_process()
+        # 强制等待一下，确保端口释放
+        time.sleep(0.5)
 
     def _start_pipeline(self):
         """启动摄像推流进程和 OpenCV 读取连接"""
-        # 1. 强制清理现有的摄像头进程，避免 "Device busy" 错误
+        # 1. 强制清理现有的摄像头进程
         self._kill_existing_process()
         
         self.cmd = self._build_command()
@@ -96,41 +121,48 @@ class LibCameraWrapper:
         try:
             print(f"Starting Camera Process: {' '.join(self.cmd)}")
             
-            # 使用日志文件记录 stderr，以便调试启动失败
-            self.stderr_log = open(self.log_file, "w+")
+            # 以写模式打开日志文件，每次清空
+            with open(self.log_file, "w") as f:
+                f.write(f"--- Camera Log Started at {time.ctime()} ---\n")
             
+            self.stderr_log = open(self.log_file, "a")
             self.process = subprocess.Popen(
                 self.cmd, 
                 stdout=subprocess.DEVNULL, 
-                stderr=self.stderr_log
+                stderr=self.stderr_log,
+                preexec_fn=os.setsid # 创建新的进程组，方便彻底杀死
             )
             
-            # 等待进程启动
-            time.sleep(2.0)
+            # 2. 等待进程启动并检查状态 (从 2.0s 降低到 0.8s)
+            time.sleep(0.8)
             
-            # 检查进程是否立即死亡
             if self.process.poll() is not None:
-                self.stderr_log.seek(0)
-                error_msg = self.stderr_log.read()
-                if not error_msg:
-                    error_msg = "[Empty Log] - Process exited without stderr output."
-                print(f"!!! CAMERA STARTUP FAILED !!!\nCMD: {' '.join(self.cmd)}\nERROR LOG:\n{error_msg}\n-----------------------------")
+                # 进程已退出，读取错误日志
+                self.stderr_log.close()
+                with open(self.log_file, "r") as f:
+                    error_log = f.read()
+                print(f"!!! CAMERA ERROR LOG !!!\n{error_log}\n------------------------")
                 raise RuntimeError(f"Camera process failed to start. See log above.")
             
-            print(f"Camera streaming to UDP://127.0.0.1:{self.udp_port}")
+            # 3. 尝试连接 OpenCV (针对 H.264 优化探测)
+            # 降低 probesize 和 analyzeduration 进一步减少启动时间
+            udp_url = f"udp://127.0.0.1:{self.udp_port}?overrun_nonfatal=1&fifo_size=1000000"
             
-            # 配置 OpenCV 读取 UDP 流
-            # 使用 udp://@:1234 绑定所有接口
-            # 设置 overrun_nonfatal=1 防止缓冲区溢出导致崩溃
-            # 增加 fifo_size 和 buffer_size 以应对网络波动
-            udp_url = f"udp://@:{self.udp_port}?overrun_nonfatal=1&fifo_size=50000000&buffer_size=10000000"
-            self.cap = cv2.VideoCapture(udp_url, cv2.CAP_FFMPEG)
+            # 环境变量优化：极致降低探测时间
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "probesize;128|analyzeduration;0|fpsprobesize;1"
             
-            if not self.cap.isOpened():
-                self.release()
-                raise RuntimeError("Failed to connect OpenCV to UDP stream.")
+            max_retries = 5
+            for i in range(max_retries):
+                print(f"Connecting to H.264 stream (Attempt {i+1}/{max_retries})...")
+                self.cap = cv2.VideoCapture(udp_url, cv2.CAP_FFMPEG)
                 
-            print("OpenCV connected to camera stream.")
+                if self.cap.isOpened():
+                    print("OpenCV connected to camera stream.")
+                    return
+                
+                time.sleep(1.0)
+            
+            raise RuntimeError("Failed to connect OpenCV to H.264 stream after retries.")
             
         except Exception as e:
             self.release()
@@ -142,10 +174,49 @@ class LibCameraWrapper:
         """
         try:
             target = self.cmd_base
-            subprocess.run(["pkill", "-x", target], stderr=subprocess.DEVNULL)
-            time.sleep(0.5) # 给硬件一点时间释放
+            # 使用更彻底的 kill 方式
+            subprocess.run(["pkill", "-9", "-x", target], stderr=subprocess.DEVNULL)
+            time.sleep(0.3) # 给硬件和端口一点时间释放
         except Exception:
             pass
+
+    def _handle_failure(self):
+        """处理读取失败，必要时重启链路"""
+        self.fail_count += 1
+        if (self.process and self.process.poll() is not None) or self.fail_count >= self.max_fail:
+            print("Camera stream stalled. Restarting pipeline... (视频流中断，正在重启)")
+            if self.process and self.process.poll() is not None:
+                 try:
+                     self.stderr_log.seek(0)
+                     print(f"Last stderr: {self.stderr_log.read()[-500:]}")
+                 except: pass
+            
+            try:
+                self._start_pipeline()
+                self.fail_count = 0
+            except Exception as e:
+                print(f"Restart failed: {e}")
+        return False
+
+    def grab(self):
+        """代理 cv2.VideoCapture.grab()"""
+        if not self.cap: return False
+        res = self.cap.grab()
+        if not res:
+            self._handle_failure()
+        else:
+            self.fail_count = 0
+        return res
+
+    def retrieve(self):
+        """代理 cv2.VideoCapture.retrieve()"""
+        if not self.cap: return False, None
+        ret, frame = self.cap.retrieve()
+        if not ret:
+            self._handle_failure()
+        else:
+            self.fail_count = 0
+        return ret, frame
 
     def read(self):
         """
@@ -156,46 +227,11 @@ class LibCameraWrapper:
         
         ret, frame = self.cap.read()
         if not ret:
-            self.fail_count += 1
-            # 检查子进程是否已死
-            if (self.process and self.process.poll() is not None) or self.fail_count >= self.max_fail:
-                print("Camera stream stalled. Restarting pipeline... (视频流中断，正在重启)")
-                # 打印最后的错误日志
-                if self.process and self.process.poll() is not None:
-                     try:
-                         self.stderr_log.seek(0)
-                         print(f"Last stderr: {self.stderr_log.read()[-500:]}")
-                     except: pass
-                
-                try:
-                    self._start_again()
-                    self.fail_count = 0
-                except Exception as e:
-                    print(f"Restart failed: {e}")
+            self._handle_failure()
             return False, None
         else:
             self.fail_count = 0
         return True, frame
-
-    def release(self):
-        """释放资源"""
-        if hasattr(self, 'cap') and self.cap:
-            self.cap.release()
-            self.cap = None
-            
-        if self.process:
-            print("Stopping camera process...")
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-            self.process = None
-            
-        if hasattr(self, 'stderr_log') and self.stderr_log:
-            try:
-                self.stderr_log.close()
-            except: pass
 
     def _start_again(self):
         """重启整个流水线"""

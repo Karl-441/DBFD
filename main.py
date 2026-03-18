@@ -11,7 +11,32 @@ import os
 """
 
 # 将项目根目录添加到系统路径，确保能导入 core, algorithm 等模块
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(root_dir)
+
+# --- 自动引导虚拟环境 (Auto-venv Bootstrapping) ---
+def setup_venv():
+    """
+    自动检测并加载项目根目录下的 venv，解决依赖检测不到的问题
+    """
+    import platform
+    venv_path = os.path.join(root_dir, "venv")
+    if os.path.exists(venv_path):
+        # 根据系统确定 site-packages 路径
+        if platform.system() == "Windows":
+            site_pkg = os.path.join(venv_path, "Lib", "site-packages")
+        else:
+            # Linux/Pi 路径通常包含 python 版本号
+            import glob
+            lib_path = os.path.join(venv_path, "lib", "python*", "site-packages")
+            matches = glob.glob(lib_path)
+            site_pkg = matches[0] if matches else None
+        
+        if site_pkg and os.path.exists(site_pkg) and site_pkg not in sys.path:
+            sys.path.insert(0, site_pkg)
+            print(f"[BOOT] Venv site-packages injected: {site_pkg}")
+
+setup_venv()
 
 import config
 from core.memory_monitor import MemoryMonitor

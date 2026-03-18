@@ -1,0 +1,43 @@
+# Fire Detection Correction Component Configuration
+
+# Input settings
+input:
+  base_dir: "../runs"
+  polling_interval: 10 # seconds
+  file_patterns:
+    - "*.jpg"
+    - "*.png"
+  label_ext: ".json" # or .xml
+
+# Output & Export settings
+export:
+  output_dir: "./exported_datasets"
+  format: "coco" # "coco" or "voc"
+  test_split: 0.2
+
+# Training settings
+training:
+  base_model_path: "../models/best.pt"
+  output_model_dir: "./new_models"
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.001
+  early_stopping_patience: 10
+  map_improvement_threshold: 0.02 # 2% improvement required
+  auto_tune: true
+  tensorboard_dir: "./logs/tensorboard"
+
+# GUI settings
+gui:
+  theme: "light" # "light" or "dark"
+  reviewer_name: "Default Reviewer"
+  reviewer_list:
+    - "Admin"
+    - "Operator_01"
+    - "Operator_02"
+
+# Logging
+logging:
+  level: "INFO"
+  file_path: "./logs/app.log"
+  remote_log_url: "" # Optional

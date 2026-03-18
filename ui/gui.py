@@ -27,11 +27,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from algorithm.preprocess import preprocess_image
 from algorithm.features import extract_features
 from algorithm.pnn import PNN
+from algorithm.yolo_detector import YoloDetector
 from algorithm.fusion import FusionDetector
 from core.output_manager import OutputManager
 from core.alarm_manager import AlarmManager
+from core.hardware_booster import HardwareBooster
 from ui.config_ui import ConfigDialog
+from ui.converter_ui import ModelConverterDialog
 import pickle
+import glob
 
 try:
     from ultralytics import YOLO
@@ -56,14 +60,14 @@ class AlgorithmWorker(QThread):
     # 信号定义: 图像数据, FPS, 是否发现火灾
     result_signal = pyqtSignal(object, object, bool) 
     
-    def __init__(self, source_type, source_path, algorithm_type, pnn_model, yolo_model):
+    def __init__(self, source_type, source_path, algorithm_type, pnn_model, yolo_detector):
         super().__init__()
         self.source_type = source_type # 来源类型: 'image', 'video', 'camera', 'screen'
         self.source_path = source_path
         self.algorithm_type = algorithm_type # 算法类型: 'PNN', 'YOLO', 'FUSION'
         self.pnn_model = pnn_model
-        self.yolo_model = yolo_model
-        self.fusion_detector = FusionDetector(pnn_model, yolo_model)
+        self.yolo_detector = yolo_detector
+        self.fusion_detector = FusionDetector(pnn_model, yolo_detector)
         self.output_manager = OutputManager()
         self.alarm_manager = AlarmManager()
         self.running = True
@@ -75,6 +79,28 @@ class AlgorithmWorker(QThread):
         self.last_has_fire = False
         self.last_detect_time = 0
         
+    def _setup_opencv_camera(self, camera_index):
+        """
+        初始化 OpenCV 摄像头 (H.264 优化模式)
+        """
+        # 针对 H.264 流优化探测参数
+        os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "probesize;32|analyzeduration;0"
+        
+        cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
+        
+        # 尝试设置 H.264 格式
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.FRAME_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.FRAME_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, config.FPS)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        
+        if not cap.isOpened():
+            print(f"Error: Could not open camera {camera_index}")
+            return None
+        return cap
+
     def run(self):
         """线程主入口"""
         cap = None
@@ -91,9 +117,9 @@ class AlgorithmWorker(QThread):
                      print("GUI: Using LibCameraWrapper")
                  except ImportError as e:
                      print(f"GUI: Failed to load LibCameraWrapper: {e}")
-                     cap = cv2.VideoCapture(self.source_path)
+                     cap = self._setup_opencv_camera(self.source_path)
              else:
-                cap = cv2.VideoCapture(self.source_path)
+                cap = self._setup_opencv_camera(self.source_path)
                 
         elif self.source_type == 'screen':
             if mss is None:
@@ -122,6 +148,8 @@ class AlgorithmWorker(QThread):
             self.running = False
             return
 
+        print(f"Worker started with algorithm: {self.algorithm_type}")
+
         # 2. 主循环
         while self.running:
             if self.paused:
@@ -133,7 +161,15 @@ class AlgorithmWorker(QThread):
             
             # 读取帧
             if self.source_type in ['video', 'camera']:
-                ret, frame = cap.read()
+                # --- 关键优化：解决高延迟 (Clear Buffer Logic) ---
+                if self.source_type == 'camera':
+                    # 丢弃堆积在缓冲区的老帧，只处理最新帧
+                    for _ in range(config.GRAB_DROP_COUNT):
+                        if not cap.grab(): break
+                    ret, frame = cap.retrieve()
+                else:
+                    ret, frame = cap.read()
+
                 if not ret:
                     if self.source_type == 'video':
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 视频循环播放
@@ -156,8 +192,8 @@ class AlgorithmWorker(QThread):
                 
             if frame is not None:
                 # 处理帧
-                # 性能优化: 仅每隔 DETECT_INTERVAL 帧执行一次实际检测
-                do_detect = (self.frame_count % config.DETECT_INTERVAL == 0)
+                # 每隔 2 帧进行一次深度学习检测，以提高实时性 (Frame Skipping)
+                do_detect = (self.frame_count % 2 == 0)
                 res_frame, has_fire = self.process_frame(frame, do_detect)
                 
                 fps = 1.0 / (time.time() - start_time)
@@ -189,41 +225,39 @@ class AlgorithmWorker(QThread):
     def process_frame(self, frame, do_detect=True):
         """
         处理单帧图像：检测与绘制
-        
-        参数:
-            frame: 原始图像
-            do_detect: 是否执行新的检测。如果为 False，则复用上一帧的检测结果进行绘制。
         """
         vis = frame.copy()
         
         # 1. 执行检测 (仅当 do_detect 为 True 时)
         if do_detect:
             self.last_detections = []
-            self.last_has_fire = False
+            current_has_fire = False
             
             try:
                 if self.algorithm_type == 'PNN':
-                    # PNN 返回格式: [(x, y, w, h), ...]
                     dets, _ = self.detect_pnn(frame)
                     if dets: 
-                        self.last_has_fire = True
-                        # 统一格式化为 (x, y, w, h, label, color)
+                        current_has_fire = True
                         for (x, y, w, h) in dets:
                             self.last_detections.append((x, y, w, h, "FIRE (PNN)", (0, 0, 255)))
                         
                 elif self.algorithm_type == 'YOLO':
-                    # YOLO 返回格式: [(x, y, w, h), ...]
+                    # 调试日志：确认进入了 YOLO 分支
+                    if self.frame_count % 30 == 0:
+                        print(f"[Worker Debug] Current Algorithm: {self.algorithm_type}, Detector OK: {self.yolo_detector is not None}")
+                    
                     dets = self.detect_yolo(frame)
                     if dets: 
-                        self.last_has_fire = True
+                        current_has_fire = True
                         for (x, y, w, h) in dets:
-                            self.last_detections.append((x, y, w, h, "FIRE (YOLO)", (255, 0, 0)))
+                            self.last_detections.append((x, y, w, h, "FIRE (YOLO)", (0, 0, 255)))
+                        # 调试日志：确认检测到火灾
+                        print(f"[Worker Debug] YOLO detected fire! Added {len(dets)} boxes.")
                 
                 elif self.algorithm_type == 'FUSION':
-                    # Fusion 返回格式: [(x, y, w, h, conf, src), ...]
                     results = self.fusion_detector.detect(frame)
                     if results: 
-                        self.last_has_fire = True
+                        current_has_fire = True
                         for (x, y, w, h, conf, src) in results:
                             color = (0, 255, 0)
                             if "PNN" in src and "YOLO" not in src: color = (0, 0, 255)
@@ -233,16 +267,23 @@ class AlgorithmWorker(QThread):
             except Exception as e:
                 print(f"Detection Error: {e}")
 
-        # 2. 绘制结果 (始终执行，使用 self.last_detections)
-        for (x, y, w, h, label, color) in self.last_detections:
-            cv2.rectangle(vis, (x, y), (x+w, y+h), color, 2)
-            cv2.putText(vis, label, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        
-        # 3. 触发/停止报警
-        if self.last_has_fire:
-            self.alarm_manager.trigger()
-        else:
-            self.alarm_manager.stop()
+            # 报警逻辑重构：引入冷却机制 (Cooldown Logic)
+            if current_has_fire:
+                self.last_has_fire = True
+                self.last_detect_time = time.time()
+                self.alarm_manager.trigger()
+            else:
+                # 检查是否超过冷却时间 (Check Cooldown)
+                if self.last_has_fire:
+                    if (time.time() - self.last_detect_time) > config.ALARM_COOLDOWN:
+                        self.last_has_fire = False
+                        self.alarm_manager.stop()
+
+        # 2. 绘制结果
+        if self.last_detections:
+            for (x, y, w, h, label, color) in self.last_detections:
+                cv2.rectangle(vis, (x, y), (x+w, y+h), color, 2)
+                cv2.putText(vis, label, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             
         return vis, self.last_has_fire
 
@@ -280,19 +321,13 @@ class AlgorithmWorker(QThread):
         except: return [], None
 
     def detect_yolo(self, img):
-        """YOLO 检测流程"""
-        if self.yolo_model is None: return []
-        try:
-            # Pass device config to inference
-            results = self.yolo_model(img, verbose=False, device=config.DEVICE)
-            detections = []
-            for r in results:
-                for box in r.boxes:
-                    if int(box.cls[0]) == 0:
-                        x1, y1, x2, y2 = box.xyxy[0]
-                        detections.append((int(x1), int(y1), int(x2-x1), int(y2-y1)))
-            return detections
-        except: return []
+        """
+        YOLO 火灾检测流程 (代理到 YoloDetector)
+        返回: list of (x, y, w, h)
+        """
+        if self.yolo_detector is None:
+            return []
+        return self.yolo_detector.detect(img)
 
     def stop(self):
         """停止线程"""
@@ -309,17 +344,42 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("DBFD System - Drone Based Fire Detector (无人机火灾检测系统)")
         self.setGeometry(100, 100, 1280, 800)
         
+        # 0. 基础变量初始化 (必须最先执行，防止信号触发导致 AttributeError)
         self.output_manager = OutputManager()
-        # 模型加载
-        self.pnn_model = None
-        self.yolo_model = None
-        
+        self.hardware_booster = HardwareBooster()
         self.worker = None
+        self.pnn_model = None
+        self.yolo_detector = None
         self.current_image = None
         self.recording = False
         self.video_writer = None
         
+        # 1. 模型加载
+        self.load_pnn_model()
+        
+        # 优先使用配置中的 YOLO 模型路径，如果没有则尝试从 models 目录自动发现
+        initial_yolo = getattr(config, 'YOLO_MODEL_PATH', "best.pt")
+        self.load_yolo_model(initial_yolo)
+        
+        # 2. UI 初始化
         self.init_ui()
+        
+        # 3. 定时器：硬件监控 (Hardware Monitoring Timer)
+        self.hw_timer = QTimer(self)
+        self.hw_timer.timeout.connect(self.update_hw_stats)
+        self.hw_timer.start(3000) # 每 3 秒更新一次
+        
+        # 4. 根据配置设置默认算法
+        if getattr(config, 'USE_YOLO', False):
+            self.combo_algo.setCurrentIndex(1) # YOLO
+        elif getattr(config, 'USE_PNN', False):
+            self.combo_algo.setCurrentIndex(0) # PNN
+            
+    def update_hw_stats(self):
+        """更新状态栏硬件信息"""
+        stats = self.hardware_booster.get_stats()
+        msg = f"Temp: {stats['temp']} | CPU: {stats['cpu_clock']} | GPU: {stats['gpu_clock']} | Vulkan: {stats['vulkan']} | Status: {stats['throttled']}"
+        self.statusBar().showMessage(msg)
         
     def load_pnn_model(self, path=None):
         """加载 PNN 模型"""
@@ -353,24 +413,39 @@ class MainWindow(QMainWindow):
             return False
 
     def load_yolo_model(self, path):
-        """加载 YOLO 模型"""
-        if YOLO is None:
-            self.yolo_model = None
-            return False
-            
+        """加载 YOLO 检测器"""
         try:
-            # 检查路径
+            # 1. 路径自动补全与检索 (Path retrieval)
             if not path or not os.path.exists(path):
-                print(f"Error: Model file not found: {path}")
-                self.yolo_model = None
-                return False
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+                models_dir = os.path.join(base_dir, "models")
+                
+                # 尝试 A: 搜索 models 目录下的同名文件
+                alt_path = os.path.join(models_dir, os.path.basename(path))
+                if os.path.exists(alt_path):
+                    path = alt_path
+                else:
+                    # 尝试 B: 如果默认模型不存在，搜索 models 目录下任何 .pt 文件
+                    pt_files = glob.glob(os.path.join(models_dir, "*.pt"))
+                    if pt_files:
+                        path = pt_files[0]
+                        print(f"Warning: {os.path.basename(path)} not found, using first available: {os.path.basename(path)}")
+                    else:
+                        print(f"Error: No YOLO model files found in {models_dir}")
+                        self.yolo_detector = None
+                        return False
             
-            self.yolo_model = YOLO(path)
-            print(f"Loaded YOLO model: {path}")
-            return True
+            # 2. 实例化加载 (Initialization)
+            self.yolo_detector = YoloDetector(path)
+            if self.yolo_detector.model:
+                print(f"Loaded YOLO model successfully from: {path}")
+                return True
+            else:
+                self.yolo_detector = None
+                return False
         except Exception as e:
-            print(f"Error loading YOLO: {e}")
-            self.yolo_model = None
+            print(f"Error initializing YOLO detector: {e}")
+            self.yolo_detector = None
             return False
 
     def init_ui(self):
@@ -423,16 +498,16 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(self.btn_screen)
         gb_input.setLayout(input_layout)
         
-        # 2. 算法控制 (Algorithm Control)
-        gb_algo = QGroupBox("Algorithm Control (算法控制)")
+        # 1. 算法选择 (Algorithm Select)
+        algo_group = QGroupBox("算法控制 (Algorithm Control)")
         algo_layout = QVBoxLayout()
         
         # Initialize status label early to avoid AttributeError during model loading
         self.lbl_status = QLabel("Status: Idle")
         
-        algo_layout.addWidget(QLabel("Select Algorithm (选择算法):"))
+        algo_layout.addWidget(QLabel("Select Algorithm:"))
         self.combo_algo = QComboBox()
-        self.combo_algo.addItems(["PNN (Color+Texture)", "YOLO (Deep Learning)", "FUSION (Best Accuracy)"])
+        self.combo_algo.addItems(["PNN (Texture/Color)", "Deep Learning (YOLO/NCNN)", "FUSION (Hybrid)"])
         self.combo_algo.currentIndexChanged.connect(self.change_algorithm)
         algo_layout.addWidget(self.combo_algo)
         
@@ -446,8 +521,8 @@ class MainWindow(QMainWindow):
         if self.combo_pnn.count() > 0:
              self.change_pnn_model()
 
-        # YOLO 模型选择器
-        algo_layout.addWidget(QLabel("YOLO Model:"))
+        # 深度学习模型选择 (Deep Learning Model Select)
+        algo_layout.addWidget(QLabel("DL Model (PT/NCNN):"))
         self.combo_yolo = QComboBox()
         self.refresh_yolo_list()
         self.combo_yolo.currentIndexChanged.connect(self.change_yolo_model)
@@ -455,6 +530,12 @@ class MainWindow(QMainWindow):
         # Load initial YOLO model
         if self.combo_yolo.count() > 0:
              self.change_yolo_model()
+
+        # 模型转换按钮 (Model Converter Button)
+        self.btn_convert_ui = QPushButton("Convert Model (模型转换器)")
+        self.btn_convert_ui.clicked.connect(self.open_model_converter)
+        self.btn_convert_ui.setStyleSheet("background: #2196F3; color: white; margin-top: 5px;")
+        algo_layout.addWidget(self.btn_convert_ui)
         
         self.btn_start = QPushButton("Start Processing (开始)")
         self.btn_start.clicked.connect(self.start_processing)
@@ -465,7 +546,7 @@ class MainWindow(QMainWindow):
         algo_layout.addWidget(self.btn_start)
         algo_layout.addWidget(self.btn_stop)
         algo_layout.addWidget(self.lbl_status)
-        gb_algo.setLayout(algo_layout)
+        algo_group.setLayout(algo_layout)
         
         # 3. 输出控制 (Export)
         gb_export = QGroupBox("Output (输出)")
@@ -481,7 +562,7 @@ class MainWindow(QMainWindow):
         gb_export.setLayout(export_layout)
         
         left_layout.addWidget(gb_input)
-        left_layout.addWidget(gb_algo)
+        left_layout.addWidget(algo_group)
         left_layout.addWidget(gb_export)
         left_layout.addStretch()
         
@@ -498,6 +579,16 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(left_panel)
         main_layout.addWidget(center_panel)
+
+    def open_model_converter(self):
+        """
+        打开模型转换器对话框 (Open Model Converter Dialog)
+        """
+        dialog = ModelConverterDialog(self)
+        dialog.exec()
+        # 转换完成后刷新模型列表
+        self.refresh_yolo_list()
+        self.refresh_pnn_list()
         
         # 状态
         self.source_type = None
@@ -512,34 +603,32 @@ class MainWindow(QMainWindow):
             self.lbl_status.setText("Status: Settings Updated")
 
     def refresh_yolo_list(self):
-        """刷新 YOLO 模型列表"""
+        """扫描 models 目录，获取可用的深度学习模型 (PT 和 NCNN)"""
         self.combo_yolo.clear()
-        
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         models_dir = os.path.join(base_dir, "models")
         
-        # Ensure models dir exists
         if not os.path.exists(models_dir):
             try:
                 os.makedirs(models_dir)
             except OSError:
                 pass
-            
-        # 1. Scan models/ directory for ALL .pt files
-        if os.path.exists(models_dir):
-            files = glob.glob(os.path.join(models_dir, "*.pt"))
-            for f in files:
-                name = os.path.basename(f)
-                self.combo_yolo.addItem(name, f)
-        
-        # 2. Check for local training results - REMOVED for inference only version
-        # local_best = os.path.join(base_dir, "runs", "detect", "train", "weights", "best.pt")
-        # if os.path.exists(local_best):
-        #    self.combo_yolo.addItem("Local Best (runs/.../best.pt)", local_best)
 
-        # 3. If no models found
-        if self.combo_yolo.count() == 0:
-            self.combo_yolo.addItem("No models found in models/", "")
+        if os.path.exists(models_dir):
+            # 1. 扫描 .pt 文件
+            pt_files = glob.glob(os.path.join(models_dir, "*.pt"))
+            for f in pt_files:
+                name = os.path.basename(f)
+                self.combo_yolo.addItem(f"PyTorch: {name}", f)
+            
+            # 2. 扫描 NCNN 模型目录 (通常以 _ncnn_model 结尾)
+            ncnn_dirs = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d)) and d.endswith('_ncnn_model')]
+            for d in ncnn_dirs:
+                path = os.path.join(models_dir, d)
+                self.combo_yolo.addItem(f"NCNN: {d}", path)
+                
+            if self.combo_yolo.count() == 0:
+                self.combo_yolo.addItem("No models found", "")
 
     def refresh_pnn_list(self):
         """刷新 PNN 模型列表"""
@@ -648,20 +737,31 @@ class MainWindow(QMainWindow):
     def start_processing(self):
         if not self.source_type: return
         
-        # Enable OpenCL if using GPU acceleration
-        if config.DEVICE != 'cpu':
-            try:
-                cv2.ocl.setUseOpenCL(True)
-                print(f"OpenCL enabled: {cv2.ocl.useOpenCL()}")
-            except Exception as e:
-                print(f"Failed to enable OpenCL: {e}")
+        # --- CPU + GPU 混合加速优化 (CPU + GPU Hybrid Acceleration) ---
+        # 1. 开启 OpenCL 进行硬件级图像处理和渲染 (GPU Offloading)
+        try:
+            cv2.ocl.setUseOpenCL(True)
+            if cv2.ocl.useOpenCL():
+                print("GUI: GPU Acceleration (OpenCL) enabled for rendering.")
+        except:
+            cv2.ocl.setUseOpenCL(False)
+            
+        # 2. 显式设置 CPU 推理线程数 (Max Performance)
+        try:
+            import torch
+            # 设置 CPU 推理线程数为核心数的一半，预留核心给 GPU 渲染和系统任务
+            num_cores = os.cpu_count() or 4
+            torch.set_num_threads(max(1, num_cores // 2))
+            print(f"GUI: Torch CPU threads optimized to {torch.get_num_threads()}")
+        except:
+            pass
         
         algo_map = {0: 'PNN', 1: 'YOLO', 2: 'FUSION'}
         algo = algo_map[self.combo_algo.currentIndex()]
         
         self.worker = AlgorithmWorker(
             self.source_type, self.source_path, algo, 
-            self.pnn_model, self.yolo_model
+            self.pnn_model, self.yolo_detector
         )
         self.worker.result_signal.connect(self.update_display)
         self.worker.start()

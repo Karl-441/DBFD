@@ -12,6 +12,21 @@ class ConfigManager:
 
     def _init_defaults(self):
         # ==========================================
+        # 路径配置pathlib (必须首先初始化，因为其他配置依赖于它)
+        # ==========================================
+        # 获取 core 目录的父目录作为 BASE_DIR
+        self.BASE_DIR = Path(__file__).resolve().parent.parent
+        self.MODELS_DIR = self.BASE_DIR / "models"
+        self.MODEL_PATH = self.BASE_DIR / "model_pnn.pkl"
+        self.OUTPUT_DIR = self.BASE_DIR / "output"
+        self.LOG_DIR = self.BASE_DIR / "logs"
+
+        # 确保必要的目录存在
+        self.MODELS_DIR.mkdir(exist_ok=True)
+        self.OUTPUT_DIR.mkdir(exist_ok=True)
+        self.LOG_DIR.mkdir(exist_ok=True)
+
+        # ==========================================
         # 硬件约束
         # ==========================================
         self.MAX_MEMORY_MB = 1024
@@ -20,17 +35,18 @@ class ConfigManager:
         # ==========================================
         # 性能优化配置
         # ==========================================
-        self.DETECT_INTERVAL = 3
+        self.DETECT_INTERVAL = 2      # 每 2 帧检测一次
         self.PNN_TARGET_WIDTH = 160
         self.PNN_TARGET_HEIGHT = 120
+        self.GRAB_DROP_COUNT = 3      # 每次循环丢弃的旧帧数量，用于降低延迟
 
         # ==========================================
         # 报警设置 
         # ==========================================
         self.ALARM_GPIO_PIN = 17
-        self.ALARM_ACTIVE_HIGH = True
-        self.ALARM_COOLDOWN = 5.0
-
+        self.ALARM_ACTIVE_HIGH = False # 绝大多数无源/有源蜂鸣器模块是低电平触发，设为 False 更安全
+        self.ALARM_COOLDOWN = 3.0     # 冷却缩短到 3 秒，更灵敏
+        
         # ==========================================
         # 摄像头设置 
         # ==========================================
@@ -45,22 +61,10 @@ class ConfigManager:
         # ==========================================
         self.USE_PNN = True
         self.USE_YOLO = False
-        self.DEVICE = 'cpu'  # cpu, 0, mps, auto
-
-        # ==========================================
-        # 路径配置pathlib
-        # ==========================================
-        # 获取 core 目录的父目录作为 BASE_DIR
-        self.BASE_DIR = Path(__file__).resolve().parent.parent
-        self.MODELS_DIR = self.BASE_DIR / "models"
-        self.MODEL_PATH = self.BASE_DIR / "model_pnn.pkl"
-        self.OUTPUT_DIR = self.BASE_DIR / "output"
-        self.LOG_DIR = self.BASE_DIR / "logs"
-
-        # 确保必要的目录存在
-        self.MODELS_DIR.mkdir(exist_ok=True)
-        self.OUTPUT_DIR.mkdir(exist_ok=True)
-        self.LOG_DIR.mkdir(exist_ok=True)
+        self.YOLO_MODEL_PATH = str(self.MODELS_DIR / "best.pt")
+        self.DEVICE = 'cpu'  # 树莓派强制 cpu
+        self.YOLO_CONF_THRESH = 0.45  # 适中的阈值，平衡误报与漏检
+        self.YOLO_MIN_AREA = 50      # 过滤微小噪点 (50x50 左右)
 
     def load_config(self, config_path="config.json"):
         """从 JSON 文件加载配置，覆盖默认值"""

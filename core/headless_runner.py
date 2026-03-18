@@ -11,6 +11,7 @@ import pickle
 import sys
 import os
 import numpy as np
+from pathlib import Path
 import config
 from algorithm.preprocess import preprocess_image
 from algorithm.features import extract_features
@@ -86,6 +87,12 @@ def run_headless(camera_index=0):
 
     print("Monitoring started. Press Ctrl+C to stop. (监控已启动，按 Ctrl+C 停止)")
     
+    perf_log = os.getenv("DBFD_PERF_TEST") == "1"
+    perf_file = None
+    if perf_log:
+        perf_file = open("csv/perf_stats.csv", "w")
+        perf_file.write("timestamp,latency_ms,fps\n")
+
     try:
         while True:
             start_time = time.time()
@@ -101,6 +108,13 @@ def run_headless(camera_index=0):
             # 3. 执行检测 (Detect)
             detections, _ = detect_fire(frame, pnn_model)
             
+            # 计算延迟和 FPS
+            process_time = time.time() - start_time
+            latency_ms = process_time * 1000
+            
+            if perf_log:
+                perf_file.write(f"{time.time()},{latency_ms:.2f},0\n")
+
             if detections:
                 print(f"FIRE DETECTED! {len(detections)} regions. (发现火情!)")
                 alarm_manager.trigger()
@@ -131,6 +145,8 @@ def run_headless(camera_index=0):
                 elapsed = time.time() - fps_start_time
                 fps = config.GC_INTERVAL / elapsed
                 print(f"Current FPS: {fps:.2f}")
+                if perf_log:
+                    perf_file.write(f"{time.time()},0,{fps:.2f}\n")
                 fps_start_time = time.time()
 
             # 5. 帧率控制 (FPS Control)
@@ -141,6 +157,8 @@ def run_headless(camera_index=0):
     except KeyboardInterrupt:
         print("Stopping headless runner... (正在停止)")
     finally:
+        if perf_file:
+            perf_file.close()
         cap.release()
         alarm_manager.cleanup()
 
