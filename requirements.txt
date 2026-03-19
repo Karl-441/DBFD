@@ -25,9 +25,9 @@ torch
 torchvision
 
 # Testing
-pytest==7.4.4
-pytest-qt==4.4.0
-pytest-cov==4.1.0
+pytest
+pytest-qt
+pytest-cov
 
 # Utilities - On Pi, install via apt: sudo apt install python3-pil
 watchdog

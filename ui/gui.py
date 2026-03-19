@@ -797,47 +797,60 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText("Status: Stopped")
         self.lbl_status.setStyleSheet("color: gray; font-weight: bold;")
         
-    def update_display(self, frame, fps, has_fire):
-        """更新 UI 显示"""
-        # 优化: 不要强引用当前帧，或者确保正确替换
-        self.current_image = frame 
-        self.lbl_fps.setText(f"FPS: {fps:.2f}")
-        
-        # 火灾警告叠加层
-        if has_fire:
-            # 绘制半透明红色框
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (0, 0), (300, 50), (0, 0, 255), -1)
-            cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-            del overlay
+    def update_display(self, raw_frame, vis_frame, fps, has_fire):
+        """更新 UI 显示，支持在原始帧和处理后帧之间切换。"""
+        try:
+            # The visualized frame is what we want to save or record
+            self.current_image = vis_frame 
+            self.lbl_fps.setText(f"FPS: {fps:.2f}")
+
+            # Decide which frame to show on screen
+            # We assume a 'self.show_original' attribute will be added to control this
+            if getattr(self, 'show_original', False):
+                frame_to_display = raw_frame.copy()
+            else:
+                frame_to_display = vis_frame.copy()
+
+            # 火灾警告叠加层 (apply to the frame being displayed for UI feedback)
+            if has_fire:
+                # 绘制半透明红色框
+                overlay = frame_to_display.copy()
+                cv2.rectangle(overlay, (0, 0), (300, 50), (0, 0, 255), -1)
+                cv2.addWeighted(overlay, 0.5, frame_to_display, 0.5, 0, frame_to_display)
+                del overlay
+                
+                # 绘制文字
+                cv2.putText(frame_to_display, "WARNING: FIRE DETECTED!", (10, 35), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
-            # 绘制文字
-            cv2.putText(frame, "WARNING: FIRE DETECTED!", (10, 35), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
-        # 将 BGR 转为 RGB 用于 Qt 显示
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        
-        # 创建 QImage
-        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-        
-        # 缩放并显示 (使用 FastTransformation 保证性能)
-        pixmap = QPixmap.fromImage(qt_image).scaled(
-            self.display_label.size(), 
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation
-        )
-        self.display_label.setPixmap(pixmap)
-        
-        if self.recording and self.video_writer:
-            self.video_writer.write(frame)
-        
-        # 清理局部变量
-        del rgb_image
-        del qt_image
-        del pixmap
+            # 将 BGR 转为 RGB 用于 Qt 显示
+            rgb_image = cv2.cvtColor(frame_to_display, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+            bytes_per_line = ch * w
+            
+            # 创建 QImage
+            qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            
+            # 缩放并显示 (使用 FastTransformation 保证性能)
+            pixmap = QPixmap.fromImage(qt_image).scaled(
+                self.display_label.size(), 
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation
+            )
+            self.display_label.setPixmap(pixmap)
+            
+            # Recording should always use the visualized frame (with detection boxes)
+            if self.recording and self.video_writer:
+                self.video_writer.write(vis_frame)
+            
+            # 清理局部变量
+            del rgb_image
+            del qt_image
+            del pixmap
+            del frame_to_display
+
+        except Exception as e:
+            print(f"UI Update Error: {e}")
 
     def save_image(self):
         if self.current_image is not None:

@@ -59,8 +59,8 @@ class ConfigManager:
         # ==========================================
         # 算法设置 
         # ==========================================
-        self.USE_PNN = True
-        self.USE_YOLO = False
+        self.MODEL_PATH = self.BASE_DIR / "model_pnn.pkl"
+        self.PNN_MAX_SAMPLES = 2000     # PNN 训练时使用的最大样本数
         self.YOLO_MODEL_PATH = str(self.MODELS_DIR / "best.pt")
         self.DEVICE = 'cpu'  # 树莓派强制 cpu
         self.YOLO_CONF_THRESH = 0.45  # 适中的阈值，平衡误报与漏检

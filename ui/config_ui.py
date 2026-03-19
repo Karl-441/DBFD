@@ -179,13 +179,11 @@ class ConfigDialog(QDialog):
             self.sb_grab_drop.setValue(config.GRAB_DROP_COUNT)
             
             # YOLO
-            self.cb_use_yolo.setChecked(config.USE_YOLO)
             self.edit_yolo_path.setText(str(config.YOLO_MODEL_PATH))
             self.sb_yolo_conf.setValue(config.YOLO_CONF_THRESH)
             self.sb_yolo_area.setValue(config.YOLO_MIN_AREA)
 
             # PNN
-            self.cb_use_pnn.setChecked(config.USE_PNN)
             self.sb_pnn_width.setValue(config.PNN_TARGET_WIDTH)
             self.sb_pnn_height.setValue(config.PNN_TARGET_HEIGHT)
             self.sb_pnn_samples.setValue(config.PNN_MAX_SAMPLES)
@@ -223,7 +221,6 @@ class ConfigDialog(QDialog):
             config.cfg.YOLO_MIN_AREA = self.sb_yolo_area.value()
 
             # PNN
-            config.cfg.USE_PNN = self.cb_use_pnn.isChecked()
             config.cfg.PNN_TARGET_WIDTH = self.sb_pnn_width.value()
             config.cfg.PNN_TARGET_HEIGHT = self.sb_pnn_height.value()
             config.cfg.PNN_MAX_SAMPLES = self.sb_pnn_samples.value()
