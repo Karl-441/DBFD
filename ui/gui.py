@@ -58,7 +58,7 @@ class AlgorithmWorker(QThread):
         通过信号将处理结果（图像、FPS、检测状态）发送回主线程进行显示。
     """
     # 信号定义: 图像数据, FPS, 是否发现火灾
-    result_signal = pyqtSignal(object, object, bool) 
+    result_signal = pyqtSignal(object, object, float, bool) 
     
     def __init__(self, source_type, source_path, algorithm_type, pnn_model, yolo_detector):
         super().__init__()
@@ -145,7 +145,7 @@ class AlgorithmWorker(QThread):
                 vis, has_fire = self.process_frame(img)
                 # 自动保存处理结果
                 self.output_manager.save_prediction(vis, [], metadata={"source": self.source_path, "has_fire": has_fire})
-                self.result_signal.emit(vis, 0.0, has_fire)
+                self.result_signal.emit(img, vis, 0.0, has_fire)
             self.running = False
             return
 
@@ -198,7 +198,7 @@ class AlgorithmWorker(QThread):
                 res_frame, has_fire = self.process_frame(frame, do_detect)
                 
                 fps = 1.0 / (time.time() - start_time)
-                self.result_signal.emit(res_frame, fps, has_fire)
+                self.result_signal.emit(frame, res_frame, fps, has_fire)
                 
                 # --- 新增：每处理 3 帧保存一次包含检测框的图像和 JSON ---
                 if has_fire and (self.frame_count % self.output_interval == 0):
