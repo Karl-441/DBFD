@@ -1,3 +1,10 @@
+"""
+内存监控器
+    后台运行的守护线程，实时监控当前进程和系统的内存使用情况。
+    当内存使用超过阈值时，自动触发 Python 垃圾回收和系统级内存释放，
+    防止程序因 OOM 被系统杀掉。
+"""
+
 import psutil
 import time
 import threading
@@ -5,15 +12,6 @@ import logging
 import os
 import gc
 import ctypes
-
-"""
-内存监控器
-    后台运行的守护线程，实时监控当前进程和系统的内存使用情况。
-    当内存使用超过阈值时，自动触发 Python 垃圾回收和系统级内存释放,防止程序因OOM被系统杀掉。
-"""
-
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class MemoryMonitor:

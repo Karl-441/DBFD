@@ -1,5 +1,8 @@
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class ConfigManager:
     _instance = None
@@ -81,9 +84,9 @@ class ConfigManager:
                                 setattr(self, key, Path(value))
                             else:
                                 setattr(self, key, value)
-                print(f"Config loaded from {config_file}")
+                logger.info(f"配置已从 {config_file} 加载")
             except Exception as e:
-                print(f"Failed to load config: {e}")
+                logger.error(f"加载配置文件失败: {e}")
 
     def save_config(self, config_path="config.json"):
         """保存当前配置到 JSON 文件"""
@@ -95,13 +98,13 @@ class ConfigManager:
                     data[key] = str(value)
                 else:
                     data[key] = value
-        
+
         try:
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)
-            print(f"Config saved to {config_file}")
+            logger.info(f"配置已保存到 {config_file}")
         except Exception as e:
-            print(f"Failed to save config: {e}")
+            logger.error(f"保存配置文件失败: {e}")
 
 # 全局单例实例
 cfg = ConfigManager()

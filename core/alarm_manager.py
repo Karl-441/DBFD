@@ -60,7 +60,8 @@ class AlarmManager:
                 try:
                     factory = LGPIOFactory()
                     self.device = OutputDevice(self.pin, active_high=self.active_high, pin_factory=factory)
-                except:
+                except Exception as e:
+                    logger.warning(f"LGPIOFactory 不可用 ({e})，使用默认引脚工厂。")
                     self.device = OutputDevice(self.pin, active_high=self.active_high)
                 
                 self.gpio_ok = True
@@ -170,8 +171,8 @@ class AlarmManager:
                     self.device = None
                 elif GPIO_LIB == "RPi.GPIO":
                     GPIO.cleanup(self.pin)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"GPIO 资源释放时出现非致命错误: {e}")
         self.gpio_ok = False
 
     def cleanup(self):

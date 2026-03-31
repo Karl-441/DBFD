@@ -54,9 +54,6 @@ class ConfigDialog(QDialog):
         # 2. YOLO Settings
         gb_yolo = QGroupBox("YOLO Detection Settings (YOLO 检测设置)")
         form_yolo = QFormLayout()
-        
-        self.cb_use_yolo = QCheckBox("Enable YOLO (启用 YOLO)")
-        form_yolo.addRow("YOLO Active:", self.cb_use_yolo)
 
         self.edit_yolo_path = QLineEdit()
         btn_browse_yolo = QPushButton("Browse")
@@ -82,9 +79,6 @@ class ConfigDialog(QDialog):
         # 3. PNN Settings
         gb_pnn = QGroupBox("PNN Detection Settings (PNN 检测设置)")
         form_pnn = QFormLayout()
-        
-        self.cb_use_pnn = QCheckBox("Enable PNN (启用 PNN)")
-        form_pnn.addRow("PNN Active:", self.cb_use_pnn)
 
         self.sb_pnn_width = QSpinBox()
         self.sb_pnn_width.setRange(32, 640)

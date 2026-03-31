@@ -1,12 +1,12 @@
-import numpy as np
-from scipy.spatial.distance import cdist
-import config
-
 """
 PNN 概率神经网络模块 (Inference Only)
     实现了一个概率神经网络 (PNN) 分类器。
     仅保留预测功能，移除训练相关代码。
 """
+
+import numpy as np
+from scipy.spatial.distance import cdist
+import config
 
 class PNN:
     def __init__(self):
@@ -15,14 +15,15 @@ class PNN:
         self.sigmas = {}     # 类别 -> 平滑因子 (Sigma) 的映射 (Loaded from pickle)
         self.classes = []    # 类别列表
         
-    def predict(self, X):
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """
-        预测新样本,对新样本进行分类
+        对新样本进行分类。
+
         参数:
-            X (array-like): 测试样本特征
-            
-        返回值:
-            numpy.ndarray: 预测标签数组
+            X: 测试样本特征，形状为 (n_features,) 或 (n_samples, n_features)
+
+        返回:
+            numpy.ndarray: 预测标签数组，长度为 n_samples
         """
         X = np.array(X)
         if X.ndim == 1:

@@ -1,27 +1,6 @@
-try:
-    import cv2
-    cv2.setUseOptimized(True)
-    cv2.setNumThreads(2)
-except ImportError:
-    # 这里的异常会被 main.py 捕获，但为了模块独立性保留提示
-    raise ImportError("opencv-python (cv2) is not installed. Please run 'sudo apt install python3-opencv' or 'pip install opencv-python-headless'.")
-
-import time
-import pickle
-import sys
-import os
-import numpy as np
-from pathlib import Path
-import config
-from algorithm.preprocess import preprocess_image
-from algorithm.features import extract_features
-from core.output_manager import OutputManager
-from core.alarm_manager import AlarmManager
-
-import gc
-
 """
-    该模块负责在没有GUI的情况下运行火灾检测系统。
+无头模式运行器
+    该模块负责在没有 GUI 的情况下运行火灾检测系统。
     适用于服务器环境或资源受限的树莓派设备。
     主要流程：
     1. 初始化摄像头 (LibCamera 或 OpenCV)
@@ -30,51 +9,76 @@ import gc
     4. 内存管理与自动垃圾回收
 """
 
-def _setup_opencv_camera(camera_index):
-    """辅助函数：初始化标准 OpenCV 摄像头"""
+try:
+    import cv2
+    cv2.setUseOptimized(True)
+    cv2.setNumThreads(2)
+except ImportError:
+    raise ImportError("opencv-python (cv2) 未安装，请运行 'sudo apt install python3-opencv' 或 'pip install opencv-python-headless'。")
+
+import time
+import pickle
+import sys
+import os
+import logging
+import numpy as np
+from pathlib import Path
+import config
+from core.output_manager import OutputManager
+from core.alarm_manager import AlarmManager
+
+import gc
+
+from algorithm.fusion import run_pnn_pipeline
+
+logger = logging.getLogger(__name__)
+
+def _setup_opencv_camera(camera_index: int):
+    """辅助函数：初始化标准 OpenCV 摄像头。失败时返回 None。"""
     cap = cv2.VideoCapture(camera_index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.FRAME_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.FRAME_HEIGHT)
     cap.set(cv2.CAP_PROP_FPS, config.FPS)
-    
+
     if not cap.isOpened():
-        print("Error: Could not open camera.")
+        logger.error(f"无法打开摄像头索引 {camera_index}")
         return None
     return cap
 
-def run_headless(camera_index=0):
+def run_headless(camera_index: int = 0) -> None:
     """
     参数:
         camera_index: 摄像头设备索引
     """
-    print(f"Starting Headless Mode on Camera {camera_index}... (正在启动无头模式)")
-    
+    logger.info(f"启动无头模式，摄像头索引: {camera_index}")
+
     # 1. 加载模型 (Load Model)
     pnn_model = None
     model_path = Path(config.MODEL_PATH)
     if model_path.exists():
         with model_path.open('rb') as f:
             pnn_model = pickle.load(f)
-        print("PNN Model loaded. (模型已加载)")
+        logger.info(f"PNN 模型已加载: {model_path}")
     else:
-        print(f"Error: Model not found at {model_path} (未找到模型文件)")
+        logger.error(f"未找到 PNN 模型文件: {model_path}")
         return
 
     # 2. 初始化摄像头 (Setup Camera)
     if config.USE_LIBCAMERA:
-        print("Using Libcamera (Picamera2)... (使用 Libcamera)")
+        logger.info("正在使用 LibCamera 初始化摄像头...")
         try:
             from core.camera_wrapper import LibCameraWrapper
             cap = LibCameraWrapper(config.FRAME_WIDTH, config.FRAME_HEIGHT, config.FPS)
-            print("Libcamera initialized.")
+            logger.info("LibCamera 初始化成功。")
         except ImportError as e:
-            print(f"Failed to load Libcamera: {e}")
-            print("Falling back to OpenCV VideoCapture... (降级到 OpenCV)")
+            logger.warning(f"LibCamera 加载失败: {e}，降级到 OpenCV VideoCapture...")
             cap = _setup_opencv_camera(camera_index)
-            if not cap: return
+            if not cap:
+                return
     else:
         cap = _setup_opencv_camera(camera_index)
-        if not cap: return
+        if not cap:
+            return
 
     # 初始化管理器
     output_manager = OutputManager()
@@ -85,7 +89,7 @@ def run_headless(camera_index=0):
     frame_count = 0
     fps_start_time = time.time()
 
-    print("Monitoring started. Press Ctrl+C to stop. (监控已启动，按 Ctrl+C 停止)")
+    logger.info("监控已启动，按 Ctrl+C 停止。")
     
     perf_log = os.getenv("DBFD_PERF_TEST") == "1"
     perf_file = None
@@ -101,7 +105,7 @@ def run_headless(camera_index=0):
             ret, frame = cap.read()
             
             if not ret:
-                print("Failed to grab frame. (无法读取帧)")
+                logger.warning("无法读取视频帧，等待 1 秒后重试...")
                 time.sleep(1)
                 continue
 
@@ -116,9 +120,9 @@ def run_headless(camera_index=0):
                 perf_file.write(f"{time.time()},{latency_ms:.2f},0\n")
 
             if detections:
-                print(f"FIRE DETECTED! {len(detections)} regions. (发现火情!)")
+                logger.warning(f"检测到火情！共 {len(detections)} 个区域。")
                 alarm_manager.trigger()
-                
+
                 # 保存证据图片
                 if time.time() - last_save_time > save_interval:
                     # 绘制检测框
@@ -126,11 +130,11 @@ def run_headless(camera_index=0):
                     for (x, y, w, h) in detections:
                         cv2.rectangle(vis, (x, y), (x+w, y+h), (0, 0, 255), 2)
                         cv2.putText(vis, "FIRE", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                    
+
                     path = output_manager.save_prediction(vis, detections, filename=f"fire_alert_{int(time.time())}.jpg")
-                    print(f"Alert saved: {path}")
+                    logger.info(f"报警图片已保存: {path}")
                     last_save_time = time.time()
-                    
+
                     # 显式删除大对象
                     del vis
             
@@ -141,10 +145,10 @@ def run_headless(camera_index=0):
             frame_count += 1
             if frame_count % config.GC_INTERVAL == 0:
                 gc.collect()
-                # 计算并打印 FPS
+                # 计算并记录 FPS
                 elapsed = time.time() - fps_start_time
                 fps = config.GC_INTERVAL / elapsed
-                print(f"Current FPS: {fps:.2f}")
+                logger.info(f"当前 FPS: {fps:.2f}")
                 if perf_log:
                     perf_file.write(f"{time.time()},0,{fps:.2f}\n")
                 fps_start_time = time.time()
@@ -155,66 +159,40 @@ def run_headless(camera_index=0):
             time.sleep(sleep_time)
 
     except KeyboardInterrupt:
-        print("Stopping headless runner... (正在停止)")
+        logger.info("正在停止无头模式...")
     finally:
         if perf_file:
             perf_file.close()
         cap.release()
         alarm_manager.cleanup()
 
-def detect_fire(img, pnn_model):
+def detect_fire(img: np.ndarray, pnn_model) -> tuple:
     """
-    单帧火灾检测逻辑
-        1. 缩小图像以提高处理速度
-        2. 预处理 (颜色分割)
-        3. 连通组件分析
-        4. ROI 特征提取与分类
-        img: 输入帧
-        pnn_model: PNN 模型实例
-        detections: 检测框列表 [(x, y, w, h), ...]
-        mask: 预处理后的掩膜 (调试)
+    单帧火灾检测（仅 PNN，无头模式专用）。
+
+    参数:
+        img:        输入帧
+        pnn_model:  PNN 模型实例
+
+    返回:
+        tuple(list, np.ndarray | None)
+            - detections: [(x, y, w, h), ...]
+            - mask:       预处理后的掩膜（调试用），出错时为 None
     """
+    pnn_results = run_pnn_pipeline(
+        img, pnn_model,
+        config.PNN_TARGET_WIDTH,
+        config.PNN_TARGET_HEIGHT,
+    )
+    detections = [tuple(r['box']) for r in pnn_results]
+
+    # 单独生成 mask 供调试展示
     try:
-        # 缩小处理分辨率
         target_w, target_h = config.PNN_TARGET_WIDTH, config.PNN_TARGET_HEIGHT
-        h0, w0 = img.shape[:2]
         small = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
-        
-        # 预处理
+        from algorithm.preprocess import preprocess_image
         mask = preprocess_image(small)
-        
-        # 连通域分析
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
-        
-        # 坐标缩放比例
-        sx = w0 / float(target_w)
-        sy = h0 / float(target_h)
-        
-        detections = []
-        for i in range(1, num_labels):
-            x, y, w, h, area = stats[i]
-            if area < 12: # 过滤噪点
-                continue
-                
-            # 提取 ROI
-            component_mask = np.zeros_like(mask)
-            component_mask[labels == i] = 255
-            roi = small[y:y+h, x:x+w]
-            roi_mask = component_mask[y:y+h, x:x+w]
-            
-            try:
-                # 特征提取与分类
-                feats = extract_features(roi, roi_mask)
-                pred = pnn_model.predict(feats)[0]
-                if pred == 1:
-                    # 还原坐标到原图
-                    xr = int(x * sx)
-                    yr = int(y * sy)
-                    wr = int(w * sx)
-                    hr = int(h * sy)
-                    detections.append((xr, yr, wr, hr))
-            except:
-                continue
-        return detections, mask
     except Exception:
-        return [], None
+        mask = None
+
+    return detections, mask
