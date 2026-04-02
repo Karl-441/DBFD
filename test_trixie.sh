@@ -34,7 +34,7 @@ mkdir -p "$OUTPUT_DIR/logs"
 mkdir -p "$OUTPUT_DIR/csv"
 mkdir -p csv # 应用层 CSV 缓存
 
-echo "DBFD-Raspberry Performance Test Suite (v2.0)"
+echo "DBFD-Raspberry Performance Test Suite"
 echo "Target Output: $OUTPUT_DIR"
 echo "-----------------------------------"
 

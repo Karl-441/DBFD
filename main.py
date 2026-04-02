@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 def _setup_logging() -> None:
-    """初始化全局日志系统，必须在所有模块导入之前调用。"""
+    """初始化全局日志系统，必须在所有模块导入之前调用"""
     log_dir = Path(root_dir) / "logs"
     log_dir.mkdir(exist_ok=True)
     logging.basicConfig(
